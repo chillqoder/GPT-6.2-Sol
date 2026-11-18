@@ -1,0 +1,2142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101720">
+  <title>Orc Shaman — Spirits of the Storm</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      color-scheme: dark;
+      --ivory: #f2e4c9;
+      --gold: #c8a574;
+      --gutter: clamp(22px, 4.15vw, 70px);
+      font-family: system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #101720; color: var(--ivory); }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    button:focus-visible { outline: 2px solid #fff2d5; outline-offset: 5px; }
+    svg { display: block; }
+    #stage, #vignette, #flash, #damage { position: fixed; inset: 0; }
+    #stage { overflow: hidden; }
+    #stage canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+    #stage canvas:active { cursor: grabbing; }
+
+    #vignette {
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, #0a0e18a6, transparent 29%, transparent 56%, #0a101699 84%, #080c13e0),
+        radial-gradient(ellipse at 53% 43%, transparent 39%, #080b137d 100%);
+    }
+
+    .frame {
+      pointer-events: none;
+      position: fixed;
+      inset: 16px;
+      border: 1px solid #c3a57330;
+    }
+
+    .corner {
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-block-start: 1px solid #cfab74a0;
+      border-inline-start: 1px solid #cfab74a0;
+    }
+
+    .corner:nth-child(1) { top: -1px; left: -1px; }
+    .corner:nth-child(2) { top: -1px; right: -1px; transform: rotate(90deg); }
+    .corner:nth-child(3) { bottom: -1px; right: -1px; transform: rotate(180deg); }
+    .corner:nth-child(4) { bottom: -1px; left: -1px; transform: rotate(270deg); }
+
+    .heading {
+      pointer-events: none;
+      position: fixed;
+      left: var(--gutter);
+      top: clamp(30px, 5.6vh, 64px);
+      text-shadow: 0 2px 14px #080b13, 0 1px 3px #080b13;
+    }
+
+    h1 {
+      margin: 0;
+      color: var(--ivory);
+      font: normal clamp(37px, 4.4vw, 72px)/.95 Georgia, serif;
+      letter-spacing: -.06em;
+    }
+
+    .subtitle { display: block; margin-top: 10px; color: #d7b47e; font: 600 11px/1.3 system-ui, sans-serif; letter-spacing: .32em; text-transform: uppercase; }
+    .title-rule { display: flex; align-items: center; gap: 5px; width: 166px; margin: 17px 0 11px; }
+    .title-rule::before, .title-rule::after { content: ""; height: 1px; background: linear-gradient(90deg, #bf9d64bc, #bf9d6414); }
+    .title-rule::before { width: 14px; }
+    .title-rule::after { flex: 1; }
+    .diamond { width: 5px; height: 5px; border: 1px solid var(--gold); transform: rotate(45deg); }
+    .hint { margin: 0; font-size: 11px; letter-spacing: .055em; color: #d5d6d2; }
+    .hint.touch { display: none; }
+
+    .sound {
+      position: fixed;
+      top: clamp(30px, 5.6vh, 64px);
+      right: var(--gutter);
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      background: #111621c4;
+      border: 1px solid #c8a57470;
+      border-radius: 3px;
+      color: #ddc399;
+    }
+
+    .sound:hover { background: #2b2a31; border-color: #e9c593; }
+    .sound .muted, .sound[aria-pressed="true"] .audible { display: none; }
+    .sound[aria-pressed="true"] .muted { display: block; }
+
+    .hud {
+      position: fixed;
+      left: 50%;
+      bottom: max(32px, calc(env(safe-area-inset-bottom) + 22px));
+      width: min(326px, calc(100% - 48px));
+      transform: translateX(-50%);
+    }
+
+    .mana-label { display: flex; align-items: center; gap: 7px; margin: 0 0 7px; color: #cbe8f9; font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .22em; }
+    .mana-label .diamond { border-color: #8bdaff; margin-left: 2px; background: #56badcc0; box-shadow: 0 0 9px #57d1f99e; }
+    #mana-value { margin-left: auto; color: #c1d0dc; font-variant-numeric: tabular-nums; letter-spacing: .1em; }
+    .mana-track { position: relative; height: 8px; padding: 1px; border: 1px solid #7598af89; background: #0d1623; box-shadow: 0 0 14px #3887ac22; }
+    .mana-fill { height: 100%; background: linear-gradient(90deg, #255f9b, #3eaccc 74%, #a0e9f1); transform-origin: left; box-shadow: 0 0 9px #43b3d294; }
+    .mana-track::after { position: absolute; inset: 1px; content: ""; background: repeating-linear-gradient(90deg, transparent 0 calc(25% - 1px), #06182585 calc(25% - 1px) 25%); pointer-events: none; }
+
+    .spellbar { margin-top: 11px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .spell {
+      --spell: #9bdaff;
+      --tint: #16344b;
+      --sweep: 0deg;
+      position: relative;
+      isolation: isolate;
+      display: flex;
+      align-items: center;
+      flex-direction: column;
+      justify-content: flex-end;
+      gap: 6px;
+      height: 91px;
+      overflow: hidden;
+      padding: 6px 3px 8px;
+      background: radial-gradient(ellipse at 50% 20%, var(--tint), #101622 75%);
+      border: 1px solid color-mix(in srgb, var(--spell) 62%, #17202a);
+      border-radius: 4px;
+      box-shadow: 0 3px 11px #070a10af, inset 0 0 15px color-mix(in srgb, var(--spell) 13%, transparent);
+      transition: transform 120ms, box-shadow 160ms, border-color 160ms;
+    }
+
+    .spell::before { position: absolute; inset: 3px; z-index: -1; border: 1px solid color-mix(in srgb, var(--spell) 21%, transparent); border-radius: 2px; content: ""; pointer-events: none; }
+    .spell[data-spell="fireball"] { --spell: #ffad75; --tint: #452921; }
+    .spell[data-spell="earthquake"] { --spell: #a7df8b; --tint: #253d2f; }
+    .spell:hover, .spell.casting { border-color: var(--spell); box-shadow: 0 0 19px color-mix(in srgb, var(--spell) 39%, transparent), inset 0 0 20px color-mix(in srgb, var(--spell) 21%, transparent); }
+    .spell:active { transform: scale(.95); }
+    .spell .icon { width: 40px; height: 39px; color: var(--spell); filter: drop-shadow(0 0 9px color-mix(in srgb, var(--spell) 65%, transparent)); }
+    .spell-name { display: grid; place-items: center; width: 100%; min-height: 16px; color: #fff4dc; text-align: center; text-transform: uppercase; text-wrap: balance; letter-spacing: .042em; font-size: 8.5px; font-weight: 700; line-height: 1.1; }
+    .hotkey, .cost { position: absolute; z-index: 2; top: 7px; font-size: 9px; line-height: 15px; }
+    .hotkey { left: 7px; min-width: 15px; border: 1px solid #ffffff28; border-radius: 2px; background: #090d16a6; font-family: inherit; color: #e1e5e6; }
+    .cost { right: 7px; color: #b6dcef; }
+    .cooldown {
+      display: grid;
+      place-items: center;
+      position: absolute;
+      inset: 0;
+      background: conic-gradient(#040912db var(--sweep), #090d164b 0);
+      color: #fff1d5;
+      text-shadow: 0 1px 5px #000, 0 1px 2px #000;
+      font-size: 23px;
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .spell.cooling .cooldown { opacity: 1; }
+    .spell.casting .cooldown { background: conic-gradient(#0409128c var(--sweep), #090d1626 0); }
+    .spell.denied { animation: reject 320ms ease-out; }
+    @keyframes reject {
+      20%, 60% { transform: translateX(-4px); background: #5d1d2b; border-color: #ff7e78; }
+      40%, 80% { transform: translateX(4px); }
+    }
+
+    #status { position: absolute; width: 100%; bottom: 100%; margin: 0 0 15px; color: #f4bdab; font-size: 11px; text-align: center; text-shadow: 0 1px 6px #000; }
+    #flash { pointer-events: none; opacity: 0; background: #b6ddff; mix-blend-mode: screen; }
+    #damage { pointer-events: none; overflow: hidden; }
+    .damage-number { position: absolute; font: bold 29px Georgia, serif; text-shadow: 0 2px 4px #08101a, 0 0 12px currentColor; }
+    .target-label {
+      position: absolute;
+      display: grid;
+      justify-items: center;
+      gap: 4px;
+      color: #e2ceaa;
+      font-size: 8px;
+      font-weight: 650;
+      letter-spacing: .23em;
+      text-transform: uppercase;
+      text-shadow: 0 1px 5px #060b11;
+      white-space: nowrap;
+    }
+
+    .target-label .diamond { width: 4px; height: 4px; }
+    .loading {
+      position: fixed;
+      inset: 37% 24px auto;
+      text-align: center;
+      color: #eddbb8;
+      font: 19px Georgia, serif;
+      text-shadow: 0 2px 10px #05080e;
+    }
+
+    [hidden] { display: none !important; }
+    @media (pointer: coarse) {
+      .hint.desktop { display: none; }
+      .hint.touch { display: block; }
+    }
+    @media (max-width: 560px) {
+      .frame { inset: 11px; }
+      .subtitle { letter-spacing: .24em; }
+      .heading { top: max(28px, env(safe-area-inset-top)); }
+      .title-rule { margin-top: 12px; }
+      .hud { bottom: max(25px, calc(env(safe-area-inset-bottom) + 18px)); }
+      .spell { height: 84px; }
+    }
+    @media (max-height: 490px) {
+      .heading, .sound { top: 23px; }
+      h1 { font-size: 32px; }
+      .title-rule { margin: 9px 0 6px; }
+      .hud { bottom: 20px; width: 280px; }
+      .spell { height: 67px; }
+      .spell .icon { height: 29px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .spell { transition: none; }
+      .spell.denied { animation: none; border-color: #ff7e78; }
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <main id="stage" aria-label="Interactive 3D ritual clearing"></main>
+  <div id="vignette" aria-hidden="true"></div>
+  <div class="frame" aria-hidden="true"><i class="corner"></i><i class="corner"></i><i class="corner"></i><i class="corner"></i></div>
+  <div id="flash" aria-hidden="true"></div>
+  <div id="damage" aria-hidden="true">
+    <div class="target-label" id="target-label" hidden>Training dummy<i class="diamond"></i></div>
+  </div>
+
+  <header class="heading">
+    <h1>Orc Shaman<span class="subtitle"><span class="title-dash" aria-hidden="true">— </span>Spirits of the Storm</span></h1>
+    <div class="title-rule" aria-hidden="true"><i class="diamond"></i></div>
+    <p class="hint desktop">Drag to rotate · Scroll to zoom · 1/2/3 to cast</p>
+    <p class="hint touch">Drag to rotate · Pinch to zoom · Tap to cast</p>
+  </header>
+
+  <button class="sound" id="sound" type="button" aria-label="Mute sound" aria-pressed="false" title="Mute sound" disabled>
+    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M3 9h4l5-4v14l-5-4H3z"/>
+      <path class="audible" d="M15 9a4 4 0 0 1 0 6m3-9a8 8 0 0 1 0 12"/>
+      <path class="muted" d="m16 10 5 5m0-5-5 5"/>
+    </svg>
+  </button>
+
+  <p class="loading" id="loading" role="status">Entering the clearing…</p>
+
+  <section class="hud" aria-label="Spell controls">
+    <p id="status" role="status"></p>
+    <div class="mana-label" aria-hidden="true"><i class="diamond"></i>Mana<span id="mana-value">100 / 100</span></div>
+    <div id="mana" class="mana-track" role="meter" aria-label="Mana" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+      <div class="mana-fill" id="mana-fill"></div>
+    </div>
+    <div class="spellbar">
+      <button type="button" class="spell" data-spell="lightning" aria-label="Chain Lightning" aria-keyshortcuts="1 Q" disabled>
+        <kbd class="hotkey" aria-hidden="true">1</kbd><span class="cost" aria-hidden="true"></span>
+        <svg class="icon" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="m27 4-17 23h12l-3 17 19-25H26z" fill="currentColor"/>
+          <path d="m11 9-3 5m30 17 3-4M8 34l-3 3M38 8l3-3" fill="none" stroke="currentColor" stroke-opacity=".62" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="m27 4-10 20h9l-7 20 19-25H26z" fill="#fff" opacity=".22"/>
+        </svg>
+        <span class="spell-name">Chain Lightning</span><span class="cooldown" aria-hidden="true"></span>
+      </button>
+      <button type="button" class="spell" data-spell="fireball" aria-label="Fireball" aria-keyshortcuts="2 W" disabled>
+        <kbd class="hotkey" aria-hidden="true">2</kbd><span class="cost" aria-hidden="true"></span>
+        <svg class="icon" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M25 3c4 10-7 12-4 22-5-2-7-6-6-10-6 6-8 11-7 16 1 9 8 13 16 13s16-6 16-14c0-7-4-12-7-16 1 7-3 8-4 8 1-8-1-15-4-19Z" fill="currentColor"/>
+          <path d="M24 42c-5 0-8-3-8-7 0-3 2-5 4-7-1 4 2 5 3 5 2-4 5-7 5-11 4 4 6 8 6 12 0 5-4 8-10 8Z" fill="#ffeed2"/>
+        </svg>
+        <span class="spell-name">Fireball</span><span class="cooldown" aria-hidden="true"></span>
+      </button>
+      <button type="button" class="spell" data-spell="earthquake" aria-label="Earthquake Totem" aria-keyshortcuts="3 E" disabled>
+        <kbd class="hotkey" aria-hidden="true">3</kbd><span class="cost" aria-hidden="true"></span>
+        <svg class="icon" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="m3 20 8-8 8 2 5-9 8 9 7-2 6 8-10 3-4 16-7 5-8-5-3-16z" fill="currentColor"/>
+          <path d="M15 21h7m5 0h7m-10 2-3 8h6m-9 4h12" fill="none" stroke="#20332b" stroke-width="2.5" stroke-linejoin="round"/>
+          <path d="m5 20 9-2m20 0 9 2" stroke="#20332b" stroke-width="1.5"/>
+        </svg>
+        <span class="spell-name">Earthquake Totem</span><span class="cooldown" aria-hidden="true"></span>
+      </button>
+    </div>
+  </section>
+
+  <script type="module">
+    const loading = document.querySelector('#loading');
+    try {
+      const [THREE, { OrbitControls }] = await Promise.all([
+        import('three'),
+        import('three/addons/controls/OrbitControls.js')
+      ]);
+      start(THREE, OrbitControls);
+    } catch (error) {
+      loading.textContent = 'The 3D scene could not load. Check your connection and WebGL support, then reload.';
+      console.error(error);
+    }
+
+    function start(THREE, OrbitControls) {
+      // Renderer, timing, and shared geometry.
+      const stage = document.querySelector('#stage');
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.18;
+      stage.append(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color('#121923');
+      scene.fog = new THREE.FogExp2('#273b50', .052);
+      const camera = new THREE.PerspectiveCamera(37, 1, .09, 95);
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = .08;
+      controls.enablePan = false;
+      controls.minPolarAngle = .27;
+      controls.maxPolarAngle = Math.PI / 2 - .06;
+      controls.minDistance = 4.3;
+      controls.maxDistance = 21;
+
+      const clock = new THREE.Clock(false);
+      const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+      const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+      const up = V(0, 1, 0);
+      const down = V(0, -1, 0);
+      const clamp = (x, min = 0, max = 1) => Math.min(max, Math.max(min, x));
+      const lerp = THREE.MathUtils.lerp;
+      const tau = Math.PI * 2;
+      const cubeIn = x => x ** 3;
+      const cubeOut = x => 1 - (1 - x) ** 3;
+      const cubeInOut = x => x < .5 ? 4 * x ** 3 : 1 - (-2 * x + 2) ** 3 / 2;
+      const backOut = x => 1 + 2.15 * (x - 1) ** 3 + 1.15 * (x - 1) ** 2;
+      const range = (min, max) => lerp(min, max, Math.random());
+      let seed = 927;
+      const terrainRandom = (min, max) => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        return lerp(min, max, seed / 4294967296);
+      };
+
+      const SPELLS = {
+        lightning: { name: 'Chain Lightning', cost: 20, cooldown: 2, color: '#5ab4ff', duration: 1.1, release: .45, damage: 42 },
+        fireball: { name: 'Fireball', cost: 30, cooldown: 3, color: '#ff7a1a', duration: 1.2, release: .5, damage: 68 },
+        earthquake: { name: 'Earthquake Totem', cost: 45, cooldown: 5, color: '#84f96a', duration: 1.6, release: .6, damage: 96 }
+      };
+
+      const geo = {
+        box: new THREE.BoxGeometry(1, 1, 1),
+        sphere: new THREE.SphereGeometry(1, 12, 8),
+        ico: new THREE.IcosahedronGeometry(1, 0),
+        roundRock: new THREE.IcosahedronGeometry(1, 1),
+        dodeca: new THREE.DodecahedronGeometry(1, 0),
+        cylinder: new THREE.CylinderGeometry(1, 1, 1, 10),
+        cone: new THREE.ConeGeometry(1, 1, 7),
+        crystal: new THREE.OctahedronGeometry(1),
+        torus: new THREE.TorusGeometry(1, .105, 6, 28)
+      };
+      const material = (color, options = {}) => new THREE.MeshStandardMaterial({
+        color, roughness: .86, flatShading: true, ...options
+      });
+      const glowMaterial = (color, opacity = 1) => new THREE.MeshBasicMaterial({
+        color, opacity, transparent: true, blending: THREE.AdditiveBlending,
+        depthWrite: false, toneMapped: false, side: THREE.DoubleSide
+      });
+      const skin = material('#4a7c3a');
+      const skinLight = material('#6f9850');
+      const skinShade = material('#355534');
+      const fur = ['#382f30', '#594138', '#6a4e3d', '#80634b'].map(color => material(color));
+      const bone = material('#e4d2a0', { roughness: .54 });
+      const darkBone = material('#b09871');
+      const brass = material('#b78750', { metalness: .45, roughness: .45 });
+      const iron = material('#4c5153', { metalness: .42 });
+      const hide = material('#45332d');
+      const darkHide = material('#241f24');
+      const cord = material('#9b754c');
+      const cloth = material('#62434d', { side: THREE.DoubleSide });
+      const darkCloth = material('#48303c', { side: THREE.DoubleSide });
+      const ochre = material('#c38355');
+      const wood = material('#4e342c');
+      const bark = material('#271f24');
+      const woodGold = material('#76503a');
+      const featherColors = [material('#9e494b'), material('#ccc0a3'), material('#3f8987')];
+      const idleCrystal = new THREE.Color('#88f1d7');
+      const idleEyes = new THREE.Color('#ffe49b');
+      const spellColor = new THREE.Color();
+
+      function group(parent, x = 0, y = 0, z = 0) {
+        const object = new THREE.Group();
+        object.position.set(x, y, z);
+        parent.add(object);
+        return object;
+      }
+
+      function mesh(parent, geometry, mat, x, y, z, sx = 1, sy = 1, sz = 1, shadows = true) {
+        const object = new THREE.Mesh(geometry, mat);
+        object.position.set(x, y, z);
+        object.scale.set(sx, sy, sz);
+        object.castShadow = shadows;
+        object.receiveShadow = shadows;
+        parent.add(object);
+        return object;
+      }
+
+      function between(parent, geometry, mat, a, b, width, depth = width, shadows = true) {
+        const direction = b.clone().sub(a);
+        const mid = a.clone().lerp(b, .5);
+        const object = mesh(parent, geometry, mat, mid.x, mid.y, mid.z, width, direction.length(), depth, shadows);
+        object.quaternion.setFromUnitVectors(up, direction.normalize());
+        return object;
+      }
+
+      function tube(parent, points, radius, mat, segments = 14, radial = 6, shadows = true) {
+        const curve = new THREE.CatmullRomCurve3(points);
+        const geometry = new THREE.TubeGeometry(curve, segments, radius, radial, false);
+        return mesh(parent, geometry, mat, 0, 0, 0, 1, 1, 1, shadows);
+      }
+
+      function taperedCurve(parent, points, radius, mat) {
+        const curve = new THREE.CatmullRomCurve3(points);
+        const vertices = [];
+        const indices = [];
+        const n = 12;
+        const sides = 8;
+        const frames = curve.computeFrenetFrames(n, false);
+        for (let i = 0; i <= n; i++) {
+          const p = curve.getPointAt(i / n);
+          const r = radius * Math.max(.012, (1 - i / n) ** .8);
+          for (let j = 0; j < sides; j++) {
+            const theta = j / sides * tau;
+            const vertex = p.clone().addScaledVector(frames.normals[i], Math.cos(theta) * r)
+              .addScaledVector(frames.binormals[i], Math.sin(theta) * r);
+            vertices.push(...vertex.toArray());
+            if (i < n) {
+              const a = i * sides + j;
+              const b = i * sides + (j + 1) % sides;
+              indices.push(a, b, a + sides, b, b + sides, a + sides);
+            }
+          }
+        }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        geometry.setIndex(indices);
+        geometry.computeVertexNormals();
+        return mesh(parent, geometry, mat, 0, 0, 0);
+      }
+
+      function makeGlowTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 64;
+        const context = canvas.getContext('2d');
+        const gradient = context.createRadialGradient(32, 32, 0, 32, 32, 32);
+        gradient.addColorStop(0, '#fff');
+        gradient.addColorStop(.16, 'rgba(255,255,255,.86)');
+        gradient.addColorStop(.43, 'rgba(255,255,255,.3)');
+        gradient.addColorStop(1, 'rgba(255,255,255,0)');
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 64, 64);
+        return new THREE.CanvasTexture(canvas);
+      }
+
+      const glowTexture = makeGlowTexture();
+
+      function halo(parent, color, size, opacity) {
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: glowTexture, color, opacity, transparent: true, depthWrite: false,
+          blending: THREE.AdditiveBlending, toneMapped: false
+        }));
+        sprite.scale.set(size, size, 1);
+        parent.add(sprite);
+        return sprite;
+      }
+
+      function setupLights() {
+        scene.add(new THREE.HemisphereLight('#bfdbfb', '#76605b', 2));
+        const moonlight = new THREE.DirectionalLight('#c5dfff', 2.6);
+        moonlight.position.set(-4.8, 8.5, 4.4);
+        moonlight.castShadow = true;
+        moonlight.shadow.mapSize.set(1536, 1536);
+        Object.assign(moonlight.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: .5, far: 25 });
+        moonlight.shadow.normalBias = .044;
+        moonlight.shadow.bias = -.0002;
+        moonlight.target.position.set(.25, 0, 0);
+        scene.add(moonlight, moonlight.target);
+
+        const rim = new THREE.DirectionalLight('#84cfff', 1.9);
+        rim.position.set(2, 5, -7);
+        scene.add(rim);
+        const fill = new THREE.DirectionalLight('#c0acae', .57);
+        fill.position.set(6, 2, 8);
+        scene.add(fill);
+      }
+
+      // A moonlit clearing. Repeated scenery shares instanced geometry.
+      function createEnvironment() {
+        const world = group(scene);
+        const random = terrainRandom;
+        const batches = new Map();
+        const stamp = new THREE.Object3D();
+        const palette = colors => colors.map(color => new THREE.Color(color));
+        const dirt = palette(['#2e4140', '#344747', '#384745', '#3d4b45', '#304440', '#485249']);
+        const slates = palette(['#3a4c52', '#4b575e', '#485f63', '#53656b', '#35454c']);
+        const needles = palette(['#1e333e', '#263d42', '#26353f', '#2c4548', '#344751', '#1e2937']);
+        const grasses = palette(['#4c6653', '#465550', '#526657', '#3e5655', '#686a53']);
+        const choose = array => array[Math.floor(random(0, array.length))];
+
+        function instance(geometry, x, y, z, sx, sy, sz, yaw, color, options = {}) {
+          const { shadow = false, pitch = 0, roll = 0 } = options;
+          const key = geometry.uuid + shadow;
+          const batch = batches.get(key) ?? { geometry, shadow, entries: [] };
+          stamp.position.set(x, y, z);
+          stamp.scale.set(sx, sy, sz);
+          stamp.rotation.set(pitch, yaw, roll);
+          stamp.updateMatrix();
+          batch.entries.push({ matrix: stamp.matrix.clone(), color });
+          batches.set(key, batch);
+        }
+
+        const sky = new THREE.Mesh(
+          new THREE.SphereGeometry(72, 22, 16),
+          new THREE.ShaderMaterial({
+            side: THREE.BackSide,
+            depthWrite: false,
+            uniforms: {
+              nadir: { value: new THREE.Color('#354f65') },
+              zenith: { value: new THREE.Color('#101426') }
+            },
+            vertexShader: `
+              varying vec3 skyRay;
+              void main() {
+                skyRay = normalize(position);
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+              }`,
+            fragmentShader: `
+              uniform vec3 nadir;
+              uniform vec3 zenith;
+              varying vec3 skyRay;
+              void main() {
+                float height = smoothstep(-0.08, 0.43, normalize(skyRay).y);
+                gl_FragColor = vec4(mix(nadir, zenith, height), 1.0);
+                #include <colorspace_fragment>
+              }`
+          })
+        );
+        sky.renderOrder = -20;
+        world.add(sky);
+
+        const moon = group(world, 3.6, 6.2, -27);
+        const moonDisc = mesh(moon, new THREE.CircleGeometry(.99, 52), new THREE.MeshBasicMaterial({
+          color: '#d3e6f4', fog: false, toneMapped: false
+        }), 0, 0, 0, 1, 1, 1, false);
+        moonDisc.rotation.y = -.08;
+        const moonGlow = halo(moon, '#789dff', 8, .45);
+        moonGlow.material.fog = false;
+        moonGlow.position.z = -.72;
+        for (let i = 0; i < 22; i++) {
+          const angle = random(0, tau);
+          const radial = Math.sqrt(random(0, .82));
+          const mark = mesh(moon, geo.roundRock, new THREE.MeshBasicMaterial({
+            color: i % 2 ? '#918fbb' : '#809fbf', fog: false, transparent: true, opacity: random(.05, .16), depthWrite: false
+          }), Math.cos(angle) * radial, Math.sin(angle) * radial, .07, random(.06, .25), random(.02, .10), .01, false);
+          mark.rotation.z = random(-.8, .8);
+        }
+
+        const starPositions = [];
+        const starColors = [];
+        for (let i = 0; i < 380; i++) {
+          const angle = random(0, tau);
+          const height = random(.024, .62);
+          const radius = Math.sqrt(1 - height ** 2) * 58;
+          starPositions.push(Math.cos(angle) * radius, height * 58, Math.sin(angle) * radius);
+          const intensity = random(.17, .72);
+          starColors.push(intensity * .75, intensity * .83, intensity);
+        }
+        const starGeometry = new THREE.BufferGeometry();
+        starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+        starGeometry.setAttribute('color', new THREE.Float32BufferAttribute(starColors, 3));
+        world.add(new THREE.Points(starGeometry, new THREE.PointsMaterial({
+          size: .15, map: glowTexture, vertexColors: true, transparent: true,
+          depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false
+        })));
+
+        const floor = mesh(world, new THREE.CircleGeometry(47, 80), material('#334441'), 0, -.07, 0, 1, 1, 1, false);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        const groundPositions = [];
+        const groundColors = [];
+        const terrain = (x, z) => x * x + z * z < 39 ? -.026 : -.02 + .045 * Math.sin(x * .86) * Math.cos(z * .72);
+        for (let x = -16; x < 16; x += 1.7) {
+          for (let z = -17; z < 13; z += 1.55) {
+            const corners = [[x, z], [x, z + 1.55], [x + 1.7, z + 1.55], [x + 1.7, z]];
+            for (const triangle of [[0, 1, 2], [0, 2, 3]]) {
+              const color = choose(dirt).clone().multiplyScalar(random(.92, 1.13));
+              for (const index of triangle) {
+                const [px, pz] = corners[index];
+                groundPositions.push(px, terrain(px, pz), pz);
+                groundColors.push(color.r, color.g, color.b);
+              }
+            }
+          }
+        }
+        const terrainGeometry = new THREE.BufferGeometry();
+        terrainGeometry.setAttribute('position', new THREE.Float32BufferAttribute(groundPositions, 3));
+        terrainGeometry.setAttribute('color', new THREE.Float32BufferAttribute(groundColors, 3));
+        terrainGeometry.computeVertexNormals();
+        mesh(world, terrainGeometry, material('#ffffff', { vertexColors: true }), 0, 0, 0, 1, 1, 1, false).receiveShadow = true;
+
+        const pine = new THREE.ConeGeometry(1, 1, 6);
+        const treeTrunk = new THREE.CylinderGeometry(.53, 1, 1, 6);
+        for (let i = 0; i < 115; i++) {
+          const x = random(-29, 29);
+          const z = random(-32, 10);
+          if ((z > -5.1 && Math.abs(x) < 7.5) || (z > 1 && Math.abs(x) < 10)) continue;
+          const h = random(3.4, 8.4);
+          const width = h * random(.12, .24);
+          const lean = random(-.10, .10);
+          const yaw = random(0, tau);
+          const color = choose(needles);
+          instance(treeTrunk, x, h * .36 - .05, z, h * .035, h * .77, h * .038, yaw,
+            new THREE.Color('#322e33'), { roll: lean });
+          for (let layer = 0; layer < 4; layer++) {
+            const w = width * (1 - layer * .19);
+            instance(pine, x - lean * h * .23, h * (.41 + .16 * layer), z, w, h * (.49 - layer * .055), w * random(.8, 1.1),
+              yaw + layer * .81, color.clone().multiplyScalar(.77 + layer * .14), { roll: lean });
+          }
+        }
+
+        for (const [x, z, h] of [[-6.2, -1.2, 8.4], [6.1, -.2, 7.1], [-4.1, -5.6, 7.3], [5.7, -5.5, 7.9]]) {
+          instance(treeTrunk, x, h * .41, z, .29, h * .85, .3, .5, new THREE.Color('#353640'), { roll: -.09 });
+          for (let i = 0; i < 5; i++) {
+            const width = (5 - i) * .29;
+            instance(pine, x + .31, h * (.43 + .127 * i), z, width, h * (.45 - .044 * i), width,
+              i * 1.3, choose(needles), { roll: -.11 });
+          }
+          for (let i = 0; i < 5; i++) {
+            const angle = i / 5 * tau;
+            between(world, geo.cone, bark, V(x, .28, z), V(x + Math.cos(angle) * .91, -.07, z + Math.sin(angle) * .91), .15, .18, false);
+          }
+        }
+
+        for (let i = 0; i < 126; i++) {
+          const x = random(-15, 15);
+          const z = random(-15, 9);
+          if (Math.hypot(x + 1.35, z) < 2.55 || Math.hypot(x - 2.75, z - 1.1) < 1.9) continue;
+          const size = random(.11, .61);
+          instance(geo.dodeca, x, size * .06, z, size, size * random(.27, .91), size * random(.49, .93), random(0, tau),
+            choose(slates), { shadow: z > -5 && Math.abs(x) < 7, roll: random(-.26, .26) });
+        }
+
+        for (const [x, y, z, width] of [[-4.8, .24, -.85, 1.11], [-5.4, .37, -1.8, 1.36], [5.1, .22, 1.4, .86], [5.7, .38, .7, 1.18], [4.5, .28, -2.45, 1.12], [-3.8, .32, -3.5, 1.08]]) {
+          instance(geo.dodeca, x, y, z, width, y * 2.25, width * .69, random(0, tau), choose(slates), { shadow: true });
+          instance(geo.roundRock, x + .09, y * 1.9, z - .12, width * .81, y * 1.46, width * .47, random(0, tau),
+            new THREE.Color('#456455'), { pitch: -.24 });
+        }
+
+        const ritualX = -1.25;
+        for (let i = 0; i < 32; i++) {
+          const theta = i / 32 * tau;
+          const radius = 1.86 + random(-.05, .05);
+          instance(geo.dodeca, ritualX + Math.cos(theta) * radius, .018, Math.sin(theta) * radius,
+            random(.15, .21), random(.063, .125), random(.165, .23), -theta + .25, choose(slates), { shadow: true });
+        }
+
+        for (let i = 0; i < 57; i++) {
+          const x = random(.24, 4.2);
+          const z = random(-1.12, 2.45);
+          const center = .16 + (x - .15) * .31;
+          if (Math.abs(z - center) > random(.18, 1.18)) continue;
+          const size = random(.064, .27);
+          instance(geo.roundRock, x, .011, z, size, size * .13, size * random(.42, .85), random(0, tau), choose(slates));
+        }
+
+        const runeMaterial = glowMaterial('#80cabb', .43);
+        const rimMaterial = glowMaterial('#539c9e', .34);
+        for (const radius of [1.47, 1.62]) {
+          const ring = mesh(world, new THREE.RingGeometry(radius, radius + .012, 90), rimMaterial, ritualX, .005, 0, 1, 1, 1, false);
+          ring.rotation.x = -Math.PI / 2;
+        }
+        for (let i = 0; i < 12; i++) {
+          const theta = i / 12 * tau;
+          const marker = group(world, ritualX + Math.cos(theta) * 1.555, .013, Math.sin(theta) * 1.555);
+          marker.rotation.y = -theta;
+          const stem = mesh(marker, geo.box, runeMaterial, 0, 0, 0, .13, .003, .013, false);
+          stem.rotation.y = Math.PI / 2;
+          for (const side of [-1, 1]) {
+            const branch = mesh(marker, geo.box, runeMaterial, side * .035, 0, -.029, .077, .003, .012, false);
+            branch.rotation.y = side * .6;
+          }
+        }
+
+        const blade = new THREE.BufferGeometry();
+        blade.setAttribute('position', new THREE.Float32BufferAttribute([-.5, 0, 0, .43, 0, 0, .24, .58, .13, 0, 1, .44, -.14, .5, .12], 3));
+        blade.setIndex([0, 1, 2, 2, 3, 4, 4, 0, 2]);
+        blade.computeVertexNormals();
+        for (let i = 0; i < 590; i++) {
+          const x = random(-12, 12);
+          const z = random(-12, 9);
+          if (Math.hypot(x + 1.25, z) < 2.05 || Math.hypot(x - 2.7, z - 1.02) < 1.05 ||
+              (x > 0 && x < 3.6 && Math.abs(z - .29 * x) < .53)) continue;
+          const yaw = random(0, tau);
+          const color = choose(grasses);
+          for (let j = -1; j <= 1; j++) {
+            const height = random(.065, .28) * (z > 3.5 ? 1.26 : 1);
+            instance(blade, x + .03 * j, -.015, z, height * .3, height, height, yaw + j * 1.4, color,
+              { pitch: random(-.31, .3), roll: j * .35 });
+          }
+        }
+
+        for (const [x, z] of [[-3.7, 1.4], [-3.1, 1.55], [3.9, 2.15], [4.4, 1.8], [-1.3, -2.65], [.74, 2.68], [-4.2, 3.22], [1.1, -2.62]]) {
+          for (let i = 0; i < 7; i++) {
+            const a = i / 7 * tau;
+            const length = random(.2, .43);
+            instance(blade, x, 0, z, length * .36, length, length * 1.15, a, choose(grasses), { pitch: .6 + random(-.3, .16) });
+          }
+        }
+
+        for (const [x, z] of [[-3.03, 1.03], [-3.21, .88], [4.28, .83], [4.46, .98], [4.63, .71]]) {
+          const h = random(.09, .18);
+          instance(geo.cylinder, x, h * .46, z, .022, h, .022, 0, new THREE.Color('#a5a081'));
+          instance(geo.sphere, x, h, z, h * .5, h * .36, h * .5, 0, new THREE.Color('#b77955'));
+        }
+
+        const decor = material('#ffffff', { side: THREE.DoubleSide });
+        for (const { geometry, shadow, entries } of batches.values()) {
+          const batch = new THREE.InstancedMesh(geometry, decor, entries.length);
+          for (let i = 0; i < entries.length; i++) {
+            batch.setMatrixAt(i, entries[i].matrix);
+            batch.setColorAt(i, entries[i].color);
+          }
+          batch.castShadow = shadow;
+          batch.receiveShadow = true;
+          world.add(batch);
+        }
+
+        const camp = group(world, .52, .02, -2.85);
+        const ashMaterial = material('#1c2020');
+        mesh(camp, geo.dodeca, ashMaterial, 0, .018, 0, .48, .061, .45);
+        for (let i = 0; i < 9; i++) {
+          const a = i / 9 * tau;
+          const stone = mesh(camp, geo.dodeca, iron, Math.cos(a) * .44, .059, Math.sin(a) * .41, .13, random(.065, .114), .125);
+          stone.rotation.y = a;
+        }
+        for (let i = 0; i < 4; i++) {
+          const a = i / 4 * tau;
+          between(camp, geo.cylinder, wood, V(Math.cos(a) * .30, .064, Math.sin(a) * .26),
+            V(Math.cos(a + Math.PI) * .19, .15, Math.sin(a + Math.PI) * .17), .055);
+        }
+
+        const light = new THREE.PointLight('#ff983d', 14, 6, 2);
+        light.position.y = .54;
+        camp.add(light);
+        const flames = Array.from({ length: 8 }, (_, i) => {
+          const flame = mesh(camp, geo.cone, glowMaterial(i % 3 === 0 ? '#ffe8a1' : '#ff7b32', .56), 0, .28, 0, .15, .42, .15, false);
+          return { flame, phase: random(0, tau), x: random(-.13, .13), z: random(-.12, .12), height: random(.26, .63) };
+        });
+        const glow = halo(camp, '#ff913c', 1.6, .55);
+        glow.position.y = .32;
+        return { camp, light, flames, glow };
+      }
+
+      // Joint hierarchy, costume, and staff.
+      function feather(parent, x, y, z, length, width, mat, angle) {
+        const pivot = group(parent, x, y, z);
+        pivot.rotation.z = angle;
+        const shape = new THREE.BufferGeometry();
+        shape.setAttribute('position', new THREE.Float32BufferAttribute([
+          0, 0, 0, .17, .17, 0, .52, .54, .08, .37, .88, .11, -.14, 1, .15,
+          -.51, .63, .07, -.33, .27, 0, 0, .53, .18
+        ], 3));
+        shape.setIndex([0,1,7, 1,2,7, 2,3,7, 3,4,7, 4,5,7, 5,6,7, 6,0,7]);
+        shape.computeVertexNormals();
+        mesh(pivot, shape, mat, 0, 0, 0, width, length, length);
+        between(pivot, geo.cylinder, darkBone, V(0, .005, .008), V(-.033 * width, .88 * length, .153 * length), width * .04, width * .032, false);
+        return { pivot, angle };
+      }
+
+      function createStaff(hand) {
+        const staff = group(hand);
+        const shaftPoints = [V(.07, -1.22, -.034), V(.008, -.82, -.009), V(-.034, -.32, .017),
+          V(0, 0, 0), V(.044, .46, -.026), V(-.015, .76, 0)];
+        tube(staff, shaftPoints, .059, wood, 23, 8);
+        tube(staff, shaftPoints.map(p => p.clone().add(V(.038, 0, .032))), .011, woodGold, 21, 4, false);
+        mesh(staff, geo.cylinder, iron, .067, -1.16, -.031, .066, .12, .065);
+        for (let i = 0; i < 6; i++) {
+          const wrap = mesh(staff, geo.torus, i === 0 || i === 5 ? brass : cord, 0, -.14 + i * .047, 0, .063, .063, .094);
+          wrap.rotation.set(Math.PI / 2 - .12, .11, 0);
+        }
+
+        mesh(staff, geo.cylinder, brass, .024, .53, -.014, .103, .086, .1);
+        mesh(staff, geo.dodeca, woodGold, 0, .704, 0, .159, .15, .12);
+        for (const side of [-1, 1]) {
+          taperedCurve(staff, [V(side * .04, .69, -.05), V(side * .23, .9, .008),
+            V(side * .235, 1.15, .04), V(side * .11, 1.29, .04)], .088, woodGold);
+          taperedCurve(staff, [V(side * .15, 1.00, .025), V(side * .197, 1.14, .068),
+            V(side * .096, 1.26, .076)], .046, bone);
+        }
+        taperedCurve(staff, [V(0, .7, -.06), V(.04, .95, -.17), V(.015, 1.19, -.13)], .072, wood);
+        const crystalMaterial = material('#69c9b4', { emissive: idleCrystal, emissiveIntensity: 1.3, roughness: .27, metalness: .17 });
+        const crystal = mesh(staff, geo.crystal, crystalMaterial, 0, 1.011, .02, .155, .25, .138);
+        const fleck = mesh(crystal, geo.crystal, glowMaterial('#dcffec', .32), 0, 0, 0, .66, .73, .66, false);
+        fleck.rotation.y = .34;
+        const crystalGlow = halo(staff, idleCrystal, 1.20, .68);
+        crystalGlow.position.copy(crystal.position);
+        const light = new THREE.PointLight(idleCrystal, 6, 5.5, 2);
+        crystal.add(light);
+
+        const skull = group(staff, .026, .51, .12);
+        skull.rotation.z = -.1;
+        mesh(skull, geo.ico, bone, 0, 0, 0, .118, .089, .074);
+        mesh(skull, geo.cone, darkBone, 0, -.077, .031, .066, .124, .054).rotation.z = Math.PI;
+        for (const side of [-1, 1]) {
+          mesh(skull, geo.ico, bark, side * .045, .012, .063, .028, .025, .012);
+          taperedCurve(skull, [V(side * .079, .025, 0), V(side * .151, .066, -.006), V(side * .165, .135, -.01)], .037, bone);
+        }
+
+        const hangings = [];
+        for (let i = 0; i < 3; i++) {
+          const hanging = group(staff, -.101 + .105 * i, .60 - .07 * i, .062);
+          between(hanging, geo.cylinder, cord, V(), V(.007, -.25 - .052 * i, .01), .009);
+          for (let bead = 1; bead <= 4; bead++) {
+            mesh(hanging, geo.sphere, bead % 2 ? darkBone : featherColors[i], 0, -.049 * bead, .01, .027, .024, .025);
+          }
+          const tag = feather(hanging, .007, -.22 - .05 * i, .013, .32 - i * .035, .105, featherColors[i], Math.PI - .23 * (i - 1));
+          tag.pivot.rotation.y = i * .56;
+          hangings.push(hanging);
+        }
+        return { staff, crystal, crystalGlow, light, hangings };
+      }
+
+      function createShaman() {
+        const root = group(scene, -1.25, 0, 0);
+        root.name = 'shaman';
+        root.rotation.y = .18;
+        const torso = group(root, 0, 2.25, -.085);
+        torso.name = 'torso';
+        const body = group(torso);
+        mesh(body, geo.sphere, skinShade, 0, -.33, -.02, .68, .59, .35);
+        mesh(body, geo.sphere, skin, 0, -.26, .055, .62, .49, .33);
+        mesh(body, geo.sphere, hide, 0, -.7, .026, .44, .45, .31);
+        mesh(body, geo.sphere, fur[1], 0, -.19, -.12, .86, .35, .416);
+        mesh(body, geo.sphere, fur[0], 0, -.51, -.25, .62, .56, .22);
+        for (let i = 0; i < 20; i++) {
+          const a = i / 20 * tau;
+          const x = Math.cos(a) * .71;
+          const z = Math.sin(a) * .35 - .063;
+          const tuft = mesh(body, geo.cone, fur[i % fur.length], x, -.23 - .093 * Math.abs(x), z, .14 + .032 * (i % 3), .37, .14);
+          tuft.rotation.set(Math.sin(a) * -.6, -a, Math.PI + Math.cos(a) * .6);
+        }
+        for (let i = 0; i < 9; i++) {
+          const side = i < 4 ? -1 : 1;
+          const tuft = mesh(body, geo.cone, fur[(i + 1) % 4], side * (.39 + (i % 4) * .11), -.34 - .065 * (i % 4), .185,
+            .09, .32 + (i % 3) * .045, .114);
+          tuft.rotation.set(-.43, i * .85, Math.PI - side * .21);
+        }
+
+        mesh(body, geo.cylinder, darkHide, 0, -.825, .03, .46, .195, .336);
+        for (const y of [-.788, -.863]) {
+          const belt = mesh(body, geo.torus, cord, 0, y, .03, .444, .332, .23);
+          belt.rotation.x = Math.PI / 2;
+        }
+        const buckle = mesh(body, geo.torus, brass, -.055, -.826, .368, .106, .104, .14);
+        buckle.rotation.z = .15;
+        mesh(body, geo.dodeca, bone, -.052, -.829, .373, .056, .068, .037);
+        for (const side of [-1, 1]) {
+          mesh(body, geo.dodeca, ochre, side * .386, -.984, .185, .12, .151, .103);
+          mesh(body, geo.sphere, hide, side * .386, -.925, .234, .113, .053, .071);
+          mesh(body, geo.sphere, brass, side * .386, -.951, .29, .026, .022, .018);
+        }
+
+        const skirt = group(body, 0, -.825, .014);
+        const skirtGeometry = new THREE.CylinderGeometry(.39, .59, .74, 9, 2, true, .52, tau - 1.04);
+        const skirtMesh = mesh(skirt, skirtGeometry, darkCloth, 0, -.385, 0, 1, 1, .68);
+        skirtMesh.rotation.y = -.03;
+        const tabardGeometry = new THREE.BufferGeometry();
+        tabardGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
+          -.22, -.07, .32, .23, -.06, .32, .25, -.5, .42, .11, -.85, .45,
+          -.20, -.78, .39, -.28, -.49, .39, 0, -.43, .445
+        ], 3));
+        tabardGeometry.setIndex([0,6,1, 1,6,2, 2,6,3, 3,6,4, 4,6,5, 5,6,0]);
+        tabardGeometry.computeVertexNormals();
+        const tabard = group(skirt);
+        mesh(tabard, tabardGeometry, cloth, 0, 0, 0);
+        for (const side of [-1, 1]) {
+          between(tabard, geo.cylinder, ochre, V(side * .181, -.17, .341), V(side * .205, -.48, .417), .012);
+          between(tabard, geo.cylinder, ochre, V(side * .205, -.48, .417), V(side * .08, -.682, .442), .012);
+          between(tabard, geo.box, darkBone, V(0, -.35, .448), V(side * .092, -.463, .446), .021, .011, false);
+          between(tabard, geo.box, darkBone, V(0, -.572, .45), V(side * .092, -.463, .446), .021, .011, false);
+        }
+        for (let i = -2; i <= 2; i++) {
+          const a = V(i * .049, -.744 + .035 * i, .44 + i * .006);
+          between(tabard, geo.cylinder, cord, a, a.clone().add(V(.012, -.131, .034)), .012);
+        }
+
+        const necklacePoints = Array.from({ length: 21 }, (_, i) => {
+          const a = (i / 20) * tau;
+          return V(Math.sin(a) * .433, .012 - .33 * Math.max(0, Math.cos(a)), Math.cos(a) * .363 + .005);
+        });
+        tube(body, necklacePoints, .021, cord, 30, 5);
+        for (let i = -5; i <= 5; i++) {
+          const a = i * .207;
+          const x = Math.sin(a) * .44;
+          const z = Math.cos(a) * .37 + .009;
+          const y = .012 - .33 * Math.cos(a);
+          mesh(body, geo.sphere, i % 2 ? brass : bone, x, y, z, .043, .043, .035);
+          mesh(body, geo.cone, bone, x, y - .061, z + .009, .034, .115 + .035 * (i % 2 === 0), .028).rotation.z = Math.PI - a * .55;
+        }
+        mesh(body, geo.crystal, material('#83c0a9', { emissive: '#3a796c', emissiveIntensity: .65 }), 0, -.49, .38, .073, .11, .042);
+
+        const head = group(torso, 0, .046, .149);
+        head.name = 'head';
+        mesh(head, geo.sphere, skin, 0, .168, .037, .411, .432, .341);
+        mesh(head, geo.sphere, skinShade, 0, -.024, .177, .338, .193, .271);
+        mesh(head, geo.sphere, skin, 0, -.056, .251, .295, .133, .182);
+        mesh(head, geo.box, darkHide, 0, -.018, .386, .301, .041, .036).rotation.x = -.19;
+        mesh(head, geo.dodeca, skinLight, 0, .125, .355, .128, .096, .095);
+        mesh(head, geo.sphere, skinShade, 0, .075, .408, .094, .033, .029);
+        mesh(head, geo.torus, brass, 0, .042, .446, .049, .049, .081).rotation.y = .06;
+        const eyeMaterial = material('#fff5c7', { emissive: idleEyes, emissiveIntensity: 2.3, roughness: .4 });
+        const paint = material('#89c9d0', { emissive: '#4b9aa3', emissiveIntensity: .37 });
+        for (const side of [-1, 1]) {
+          mesh(head, geo.dodeca, skinShade, side * .154, .203, .298, .154, .093, .098).rotation.z = side * .19;
+          mesh(head, geo.sphere, darkHide, side * .155, .175, .348, .101, .056, .03).rotation.z = side * .2;
+          mesh(head, geo.sphere, eyeMaterial, side * .155, .176, .371, .061, .026, .027).rotation.z = side * .13;
+          mesh(head, geo.sphere, skinShade, side * .154, .177, .395, .013, .021, .009, false);
+          mesh(head, geo.ico, skinLight, side * .258, .065, .26, .12, .092, .097);
+          taperedCurve(head, [V(side * .22, -.066, .366), V(side * .258, .03, .406),
+            V(side * .27, .124, .435), V(side * .23, .161, .444)], .058, bone);
+
+          between(head, geo.cone, skin, V(side * .339, .146, -.004), V(side * .691, .263, -.003), .117, .084);
+          between(head, geo.cone, skinShade, V(side * .408, .149, .054), V(side * .604, .236, .027), .061, .043);
+          mesh(head, geo.torus, brass, side * .476, .105, .048, .059, .066, .09).rotation.y = side * .45;
+          mesh(head, geo.torus, brass, side * .54, .13, .038, .041, .05, .08).rotation.y = side * .4;
+          for (let stripe = 0; stripe < 2; stripe++) {
+            const bar = mesh(head, geo.box, paint, side * (.246 + stripe * .057), .062 - stripe * .018, .348 - stripe * .023, .026, .118 - stripe * .014, .01, false);
+            bar.rotation.set(-.19, side * .47, -side * .40);
+          }
+        }
+
+        const headwrap = mesh(head, geo.torus, darkCloth, 0, .369, .048, .349, .277, .49);
+        headwrap.rotation.set(Math.PI / 2 - .20, 0, .03);
+        const crown = group(head, 0, .387, -.022);
+        mesh(crown, geo.dodeca, wood, 0, .022, .133, .306, .147, .193);
+        mesh(crown, geo.dodeca, bone, 0, .038, .243, .155, .13, .093);
+        mesh(crown, geo.dodeca, bone, 0, -.039, .275, .095, .101, .072);
+        for (const side of [-1, 1]) {
+          mesh(crown, geo.ico, darkHide, side * .054, .044, .319, .041, .03, .022);
+          taperedCurve(crown, [V(side * .225, .023, .049), V(side * .445, .088, .017), V(side * .539, .313, -.064),
+            V(side * .469, .474, -.147), V(side * .357, .494, -.184)], .134, bone);
+          for (let ring = 0; ring < 3; ring++) {
+            const binding = mesh(crown, geo.torus, ring === 1 ? brass : darkBone, side * (.253 + ring * .043), .053 + ring * .021,
+              .045 - ring * .004, .118 - ring * .007, .105 - ring * .008, .14);
+            binding.rotation.y = Math.PI / 2 - side * .32;
+          }
+        }
+        const feathers = [
+          feather(crown, -.236, .089, -.081, .51, .181, featherColors[0], .66),
+          feather(crown, -.115, .135, -.155, .57, .174, featherColors[2], .41),
+          feather(crown, .032, .161, -.189, .59, .189, featherColors[0], -.07),
+          feather(crown, .165, .124, -.122, .51, .17, featherColors[1], -.47),
+          feather(crown, .241, .081, -.082, .38, .155, featherColors[2], -.83)
+        ];
+
+        function arm(side) {
+          const left = side === 1;
+          const sideName = left ? 'left' : 'right';
+          const upper = group(torso, side * .655, -.172, -.017);
+          upper.name = sideName + 'ArmGroup';
+          const upperLength = .54;
+          const lowerLength = .56;
+          mesh(upper, geo.sphere, skin, 0, -.19, 0, .224, .34, .222);
+          mesh(upper, geo.sphere, skinLight, side * .049, -.014, -.013, .225, .22, .218);
+          mesh(upper, geo.cylinder, hide, 0, -.31, 0, .197, .123, .185);
+          mesh(upper, geo.cylinder, cord, 0, -.33, 0, .202, .036, .19);
+          const forearm = group(upper, 0, -upperLength, 0);
+          forearm.name = sideName + 'ForearmGroup';
+          mesh(forearm, geo.sphere, skin, 0, -.17, 0, .168, .284, .172);
+          mesh(forearm, geo.cylinder, hide, 0, -.327, 0, .17, .31, .157);
+          mesh(forearm, geo.dodeca, darkHide, 0, -.327, .109, .138, .176, .089);
+          for (const y of [-.206, -.443]) {
+            mesh(forearm, geo.cylinder, brass, 0, y, 0, .176, .044, .165);
+          }
+          for (let i = 0; i < 6; i++) {
+            const theta = i / 6 * tau;
+            mesh(forearm, geo.sphere, i % 2 ? brass : featherColors[2], Math.cos(theta) * .135, -.48, Math.sin(theta) * .135, .049, .049, .049);
+          }
+          mesh(forearm, geo.sphere, bone, 0, -.323, .178, .036, .038, .02);
+
+          const hand = group(forearm, 0, -lowerLength, 0);
+          hand.name = sideName + 'Hand';
+          const fingers = [];
+          if (left) {
+            mesh(hand, geo.sphere, skin, 0, .075, .026, .132, .143, .077);
+            mesh(hand, geo.sphere, skinLight, 0, .083, .071, .105, .098, .037);
+            for (let i = 0; i < 4; i++) {
+              const finger = group(hand, -.089 + i * .057, .153 + .015 * Math.sin(i), .023);
+              finger.rotation.z = .23 - i * .15;
+              const length = .119 + (Math.sin(i + .7) * .04);
+              between(finger, geo.cylinder, skin, V(), V(0, length, .035), .029);
+              mesh(finger, geo.sphere, skinLight, 0, length, .039, .028, .036, .025);
+              fingers.push(finger);
+            }
+            const thumb = group(hand, -.116, .058, .029);
+            between(thumb, geo.cylinder, skin, V(), V(-.068, .071, .066), .041);
+            mesh(thumb, geo.sphere, skinLight, -.068, .071, .066, .039, .034, .036);
+          } else {
+            mesh(hand, geo.dodeca, skin, -.035, -.011, -.089, .149, .153, .104);
+            for (let i = 0; i < 4; i++) {
+              const finger = mesh(hand, geo.sphere, skinLight, .031, -.09 + i * .055, .027, .118, .036, .057);
+              finger.rotation.y = .46;
+            }
+            mesh(hand, geo.sphere, skin, -.094, .078, .037, .058, .076, .083).rotation.z = -.46;
+          }
+          return { upper, upperLength, forearm, lowerLength, hand, fingers, side };
+        }
+
+        const right = arm(-1);
+        const left = arm(1);
+        const staff = createStaff(right.hand);
+        const legs = [];
+        for (const side of [-1, 1]) {
+          const hip = group(root, side * .31, 1.119, -.019);
+          const thighLength = .51;
+          const shinLength = .53;
+          mesh(hip, geo.sphere, hide, 0, -.17, 0, .218, .339, .24);
+          mesh(hip, geo.cylinder, darkCloth, 0, -.245, .005, .209, .34, .209);
+          const knee = group(hip, 0, -thighLength, 0);
+          knee.name = side < 0 ? 'rightKneeGroup' : 'leftKneeGroup';
+          mesh(knee, geo.sphere, skin, 0, -.108, .037, .155, .249, .168);
+          mesh(knee, geo.dodeca, darkHide, 0, -.037, .151, .148, .162, .078);
+          mesh(knee, geo.cylinder, fur[0], 0, -.278, .01, .154, .375, .152);
+          for (let i = 0; i < 4; i++) {
+            const wrapping = mesh(knee, geo.cylinder, i % 2 ? darkBone : cord, 0, -.24 - i * .059, .017, .16, .049, .159);
+            wrapping.rotation.z = .1 * (i % 2 ? -1 : 1);
+          }
+          const foot = group(knee, 0, -shinLength, 0);
+          mesh(foot, geo.dodeca, darkHide, 0, .04, .096, .18, .139, .299);
+          mesh(foot, geo.dodeca, hide, 0, .136, .108, .169, .108, .241);
+          mesh(foot, geo.box, darkBone, 0, .149, .186, .294, .049, .083).rotation.x = .2;
+          for (let i = 0; i < 3; i++) {
+            mesh(foot, geo.sphere, skinShade, -.095 + i * .09, .07, .287, .057, .053, .074);
+          }
+          legs.push({ upper: hip, upperLength: thighLength, forearm: knee, lowerLength: shinLength, hand: foot, side });
+        }
+
+        return { root, torso, body, head, tabard, left, right, legs, feathers, eyeMaterial, ...staff };
+      }
+
+      // The dummy pivots at its footing and shares a brief hit tint across the sack.
+      function createDummy() {
+        const footing = group(scene, 2.7, 0, 1.09);
+        footing.rotation.y = -1.14;
+        const stone = material('#566266');
+        mesh(footing, geo.dodeca, stone, 0, .035, 0, .62, .103, .54);
+        for (const side of [-1, 1]) {
+          const support = mesh(footing, geo.box, wood, 0, .105, side * .225, .87, .12, .151);
+          support.rotation.y = side * .15;
+        }
+
+        const pivot = group(footing);
+        pivot.name = 'trainingDummy';
+        const burlap = material('#c2a475');
+        const coarse = material('#a08059');
+        const stitch = material('#503934');
+        mesh(pivot, geo.cylinder, wood, 0, 1.10, 0, .104, 2.12, .123);
+        mesh(pivot, geo.cylinder, woodGold, -.045, .69, .099, .036, 1.26, .024);
+        mesh(pivot, geo.box, woodGold, 0, 1.53, -.035, 1.71, .142, .165).rotation.z = -.04;
+        for (const side of [-1, 1]) {
+          const pad = mesh(pivot, geo.dodeca, coarse, side * .525, 1.55 - side * .022, .035, .239, .142, .156);
+          pad.rotation.z = side * -.13;
+          for (let j = 0; j < 3; j++) {
+            const binder = mesh(pivot, geo.torus, cord, side * (.64 + j * .036), 1.537 - side * .025, -.027, .115, .112, .137);
+            binder.rotation.y = Math.PI / 2 - .14;
+          }
+          mesh(pivot, geo.box, darkHide, side * .853, 1.53 - side * .032, -.01, .088, .159, .175);
+        }
+
+        const chest = group(pivot, 0, 1.38, .07);
+        mesh(chest, new THREE.CapsuleGeometry(.315, .34, 5, 11), burlap, 0, 0, 0, 1.04, 1, .76);
+        mesh(chest, geo.dodeca, coarse, 0, -.344, 0, .23, .118, .174);
+        for (let i = 0; i < 22; i++) {
+          const y = terrainRandom(-.30, .31);
+          const angle = terrainRandom(-1.35, 1.35);
+          const a = V(Math.sin(angle) * .31, y, Math.cos(angle) * .247);
+          const thread = a.clone().add(V(terrainRandom(-.024, .024), terrainRandom(.019, .046), .007));
+          between(chest, geo.box, i % 3 ? coarse : bone, a, thread, .009, .007, false);
+        }
+
+        const strap = mesh(chest, geo.torus, cord, 0, -.27, .006, .29, .203, .182);
+        strap.rotation.x = Math.PI / 2 - .14;
+        for (let i = 0; i < 4; i++) {
+          const wrap = mesh(pivot, geo.torus, cord, 0, 1.813 + i * .027, .02, .142, .136, .093);
+          wrap.rotation.x = Math.PI / 2 + .03;
+        }
+
+        const head = group(pivot, .024, 2.015, .083);
+        head.rotation.set(-.09, .31, -.13);
+        mesh(head, geo.sphere, burlap, 0, .012, 0, .238, .274, .223);
+        mesh(head, geo.sphere, coarse, -.031, .226, -.032, .112, .075, .104);
+        const knot = mesh(head, geo.dodeca, cord, -.049, .263, -.029, .079, .048, .083);
+        knot.rotation.z = .36;
+        for (const side of [-1, 1]) {
+          for (const cross of [-1, 1]) {
+            const x = side * .087;
+            between(head, geo.box, stitch, V(x - .039, .038 - .039 * cross, .209),
+              V(x + .039, .038 + .039 * cross, .209), .019, .018);
+          }
+        }
+        for (let i = -3; i <= 3; i++) {
+          between(head, geo.box, stitch, V(i * .027, -.083 + Math.abs(i) * .008, .213),
+            V(i * .027 + .023, -.083 + Math.abs(i + 1) * .008, .213), .012, .01, false);
+        }
+
+        const badge = group(chest, .014, .042, .238);
+        mesh(badge, geo.cylinder, wood, 0, 0, 0, .143, .052, .143).rotation.x = Math.PI / 2;
+        mesh(badge, geo.torus, brass, 0, 0, .031, .106, .106, .096);
+        mesh(badge, geo.crystal, ochre, 0, 0, .034, .075, .068, .027);
+        return { footing, pivot, chest, head, burlap, coarse, impulseX: 0, impulseZ: 0, tiltX: 0, tiltZ: 0, flash: 0 };
+      }
+
+      function hitTarget(spell, strength) {
+        dummy.impulseX += strength * .64;
+        dummy.impulseZ -= strength * .91;
+        dummy.flash = 1;
+        dummy.burlap.emissive.set(spell.color);
+        dummy.coarse.emissive.set(spell.color);
+
+        const label = document.createElement('div');
+        label.className = 'damage-number';
+        label.textContent = spell.damage;
+        label.style.color = spell.color;
+        damageLayer.append(label);
+        const origin = dummy.head.getWorldPosition(V()).add(V(0, .6, 0));
+        numbers.push({ label, origin, age: 0 });
+      }
+
+      function updateDummy(dt) {
+        // Exact damped oscillator step, stable across different frame rates.
+        const decay = 5.1;
+        const omega = 12;
+        const fade = Math.exp(-decay * dt);
+        const sin = Math.sin(omega * dt);
+        const cos = Math.cos(omega * dt);
+        for (const axis of ['X', 'Z']) {
+          const tilt = dummy['tilt' + axis];
+          const speed = dummy['impulse' + axis];
+          const b = (speed + decay * tilt) / omega;
+          const nextTilt = fade * (tilt * cos + b * sin);
+          dummy['tilt' + axis] = nextTilt;
+          dummy['impulse' + axis] = fade * omega * (b * cos - tilt * sin) - decay * nextTilt;
+        }
+        dummy.pivot.rotation.set(dummy.tiltX, 0, dummy.tiltZ);
+        dummy.flash *= Math.exp(-dt * 8.7);
+        dummy.burlap.emissiveIntensity = dummy.flash * 2.4;
+        dummy.coarse.emissiveIntensity = dummy.flash * 1.6;
+      }
+
+      function getTargetPosition() {
+        return dummy.chest.getWorldPosition(V()).add(V(0, .075, .04));
+      }
+
+      function getStaffTipWorldPosition() {
+        return shaman.crystal.getWorldPosition(V());
+      }
+
+      // Two-bone joints track wrist and foot positions within the rig.
+      const limbDirection = V();
+      const limbBend = V();
+      const upperDirection = V();
+      const foreDirection = V();
+      const worldUpper = new THREE.Quaternion();
+      const worldFore = new THREE.Quaternion();
+      const inverse = new THREE.Quaternion();
+
+      function poseLimb(limb, target, bend, handRotation) {
+        const { upper, upperLength, forearm, lowerLength, hand } = limb;
+        limbDirection.copy(target).sub(upper.position);
+        const length = clamp(limbDirection.length(), .052, upperLength + lowerLength - .006);
+        limbDirection.normalize();
+        const along = (upperLength ** 2 - lowerLength ** 2 + length ** 2) / (2 * length);
+        const height = Math.sqrt(Math.max(0, upperLength ** 2 - along ** 2));
+        limbBend.copy(bend).addScaledVector(limbDirection, -bend.dot(limbDirection)).normalize();
+        upperDirection.copy(limbDirection).multiplyScalar(along).addScaledVector(limbBend, height);
+        foreDirection.copy(limbDirection).multiplyScalar(length).sub(upperDirection);
+        worldUpper.setFromUnitVectors(down, upperDirection.normalize());
+        worldFore.setFromUnitVectors(down, foreDirection.normalize());
+        upper.quaternion.copy(worldUpper);
+        forearm.quaternion.copy(inverse.copy(worldUpper).invert()).multiply(worldFore);
+        hand.quaternion.copy(inverse.copy(worldFore).invert()).multiply(handRotation);
+      }
+
+      const rest = {
+        torso: [.11, -.03, -.035],
+        head: [-.048, .032, .008],
+        right: [-.90, -.965, .445],
+        left: [.865, -1.05, .27],
+        staff: [-.065, 0, .155],
+        palm: [.52, .22, 2.73],
+        hips: [0, 0, 0],
+        grip: [0]
+      };
+      const poseKeys = Object.keys(rest);
+      const idleOffset = Object.fromEntries(poseKeys.map(key => [key, rest[key].map(() => 0)]));
+      const frames = {
+        lightning: [
+          { time: 0 },
+          { time: .19, ease: cubeOut, torso: [-.11, -.06, -.05], right: [-.12, .62, -.21], left: [.31, .55, .02], staff: [.02, 0, .36], palm: [-.8, -.2, -1.25], head: [-.14, .045, -.06] },
+          { time: .45, ease: cubeInOut, torso: [-.29, -.10, -.07], right: [.065, 1.52, -.23], left: [.15, 1.53, .22], staff: [.19, .08, -.10], palm: [-.65, -.57, -2.71], head: [-.30, .19, -.15], hips: [0, 0, -.13] },
+          { time: .55, ease: cubeOut, torso: [-.13, .11, .06], right: [-.05, 1.15, .025], left: [.28, 1.18, .30], staff: [.20, .15, .31], palm: [-.95, -.71, -2.36], head: [.035, .27, .11], hips: [-.02, -.027, -.06] },
+          { time: 1.1, ease: cubeInOut }
+        ],
+        fireball: [
+          { time: 0 },
+          { time: .37, ease: cubeOut, torso: [-.05, -.40, -.09], right: [-.18, .33, .06], left: [.16, .22, -.51], staff: [.68, -.24, .08], palm: [-1.81, -.18, -1.38], head: [.145, .34, .074], hips: [-.035, -.059, -.04], grip: [.52] },
+          { time: .43, ease: cubeInOut, torso: [-.055, -.45, -.07], right: [-.18, .31, .06], left: [.19, .20, -.49], staff: [.76, -.24, .10], palm: [-1.76, -.18, -1.41], head: [.145, .36, .074], hips: [-.035, -.06, -.04], grip: [.58] },
+          { time: .50, ease: backOut, torso: [.145, .39, -.13], right: [-.04, .63, .035], left: [.22, .73, .575], staff: [.38, -.44, .28], palm: [-1.90, .38, -1.52], head: [-.082, .16, -.07], hips: [.035, -.055, .19] },
+          { time: .63, ease: cubeOut, torso: [.21, .47, -.15], right: [-.09, .55, .016], left: [.18, .83, .53], staff: [.28, -.43, .28], palm: [-1.62, .37, -1.31], head: [-.07, .16, -.05], hips: [.05, -.066, .21] },
+          { time: 1.2, ease: cubeInOut }
+        ],
+        earthquake: [
+          { time: 0 },
+          { time: .28, ease: cubeOut, torso: [.006, .04, -.035], right: [.70, .45, .125], staff: [-.11, .02, -.23], head: [.06, .14, .042], hips: [0, -.097, .08], grip: [.86] },
+          { time: .49, ease: cubeInOut, torso: [-.17, -.065, -.07], right: [.74, .98, .14], staff: [-.26, .05, -.33], head: [-.13, .12, .035], hips: [0, -.13, .045], grip: [1] },
+          { time: .60, ease: cubeIn, torso: [.22, .05, -.037], right: [.65, .16, .17], staff: [-.245, .04, -.21], head: [.17, .13, .038], hips: [.028, -.15, .075], grip: [1] },
+          { time: .78, ease: cubeOut, torso: [.19, .12, -.025], right: [.62, .166, .176], staff: [-.26, .04, -.18], head: [.155, .15, .045], hips: [.031, -.15, .074], grip: [1] },
+          { time: 1.6, ease: cubeInOut }
+        ]
+      };
+      const pose = Object.fromEntries(poseKeys.map(key => [key, rest[key].slice()]));
+      const staffRotation = new THREE.Quaternion();
+      const palmRotation = new THREE.Quaternion();
+      const footRotation = new THREE.Quaternion();
+      const rotation = new THREE.Euler();
+      const wristRight = V();
+      const wristLeft = V();
+      const shaftGrip = V();
+      const footTarget = V();
+      const leftBend = V(.92, -.20, -.38);
+      const rightBend = V(-.89, -.26, -.57);
+      const kneeBend = V(.07, 0, 1);
+
+      function updatePose(type, elapsed, t) {
+        let from = idleOffset;
+        let to = idleOffset;
+        let amount = 0;
+        if (type) {
+          const keyframes = frames[type];
+          const next = keyframes.findIndex(key => key.time >= elapsed);
+          if (next > 0) {
+            from = keyframes[next - 1];
+            to = keyframes[next];
+            amount = to.ease(clamp((elapsed - from.time) / (to.time - from.time)));
+          }
+        }
+
+        for (const key of poseKeys) {
+          const a = from[key] ?? idleOffset[key];
+          const b = to[key] ?? idleOffset[key];
+          for (let axis = 0; axis < a.length; axis++) {
+            pose[key][axis] = rest[key][axis] + lerp(a[axis], b[axis], amount);
+          }
+        }
+        const breathe = Math.sin(t * 2.14);
+        const sway = Math.sin(t * 1.05);
+        shaman.root.position.set(-1.25 + pose.hips[0], pose.hips[1], 0);
+        shaman.root.rotation.y = .18 + pose.hips[2];
+        shaman.torso.rotation.set(...pose.torso);
+        shaman.torso.rotation.x += breathe * .013;
+        shaman.torso.rotation.z += sway * .014;
+        shaman.body.scale.y = 1 + breathe * .016;
+        shaman.head.rotation.set(...pose.head);
+        shaman.head.rotation.y += Math.sin(t * .77) * .082;
+        shaman.head.rotation.z += Math.sin(t * .48 + .4) * .063;
+        shaman.tabard.rotation.x = .045 * Math.sin(t * 2.7) + pose.hips[1] * 1.48;
+
+        wristRight.set(...pose.right);
+        wristRight.z += .023 * sway;
+        wristLeft.set(...pose.left);
+        wristLeft.x += .018 * sway;
+        staffRotation.setFromEuler(rotation.set(...pose.staff));
+        palmRotation.setFromEuler(rotation.set(...pose.palm));
+        if (type === 'earthquake') {
+          const grip = clamp(pose.grip[0]);
+          shaftGrip.set(.005, .32, .01).applyQuaternion(staffRotation).add(wristRight);
+          wristLeft.lerp(shaftGrip, grip);
+          palmRotation.slerp(footRotation.setFromEuler(rotation.set(.51, -.23, 1.76)), grip);
+        }
+        poseLimb(shaman.right, wristRight, rightBend, staffRotation);
+        poseLimb(shaman.left, wristLeft, leftBend, palmRotation);
+        for (const finger of shaman.left.fingers) {
+          finger.rotation.x = .15 + pose.grip[0] * .86 + Math.sin(t * 1.4) * .07;
+        }
+
+        for (const leg of shaman.legs) {
+          footTarget.set(leg.side * .44 - pose.hips[0], .112 - pose.hips[1], leg.side * -.075 + .035);
+          footRotation.setFromEuler(rotation.set(0, leg.side * .20 - pose.hips[2], 0));
+          poseLimb(leg, footTarget, kneeBend, footRotation);
+        }
+      }
+
+      // One capped particle buffer serves sparks, embers, dust, and spirit wisps.
+      const particleLimit = 640;
+      const particles = [];
+      const pointsGeometry = new THREE.BufferGeometry();
+      const pointPositions = new Float32Array(particleLimit * 3);
+      const pointColors = new Float32Array(particleLimit * 3);
+      const pointSizes = new Float32Array(particleLimit);
+      const pointOpacities = new Float32Array(particleLimit);
+      for (const [name, data, size] of [
+        ['position', pointPositions, 3], ['particleColor', pointColors, 3],
+        ['pointSize', pointSizes, 1], ['pointOpacity', pointOpacities, 1]
+      ]) {
+        pointsGeometry.setAttribute(name, new THREE.BufferAttribute(data, size).setUsage(THREE.DynamicDrawUsage));
+      }
+      const particlesMaterial = new THREE.ShaderMaterial({
+        uniforms: { sprite: { value: glowTexture }, pixelScale: { value: 1 } },
+        vertexShader: `
+          attribute vec3 particleColor;
+          attribute float pointSize;
+          attribute float pointOpacity;
+          uniform float pixelScale;
+          varying vec3 tint;
+          varying float alpha;
+          void main() {
+            vec4 view = modelViewMatrix * vec4(position, 1.0);
+            gl_Position = projectionMatrix * view;
+            gl_PointSize = clamp(pointSize * pixelScale / max(0.1, -view.z), 1.0, 140.0);
+            tint = particleColor;
+            alpha = pointOpacity;
+          }`,
+        fragmentShader: `
+          uniform sampler2D sprite;
+          varying vec3 tint;
+          varying float alpha;
+          void main() {
+            gl_FragColor = vec4(tint, texture2D(sprite, gl_PointCoord).a * alpha);
+            #include <colorspace_fragment>
+          }`,
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false
+      });
+      const particleField = new THREE.Points(pointsGeometry, particlesMaterial);
+      particleField.frustumCulled = false;
+      particleField.renderOrder = 4;
+      scene.add(particleField);
+
+      function createParticleBurst({ position, count, color, endColor = color, speed = 1, gravity = 0, life = .5, size = .12, spread = 0,
+        lift = 0, opacity = .85, drag = .7 }) {
+        const startTint = new THREE.Color(color);
+        const endTint = new THREE.Color(endColor);
+        for (let i = 0; i < count && particles.length < particleLimit; i++) {
+          const theta = range(0, tau);
+          const y = range(-.32, 1);
+          const radius = Math.sqrt(1 - y * y);
+          const direction = V(Math.cos(theta) * radius, y, Math.sin(theta) * radius);
+          const p = position.clone().addScaledVector(direction, range(0, spread));
+          const velocity = direction.multiplyScalar(range(.21, 1) * speed);
+          velocity.y += lift;
+          const lifetime = life * range(.54, 1.22);
+          particles.push({ p, velocity, startTint, endTint, gravity, lifetime, age: 0, size: size * range(.52, 1.2), opacity, drag });
+        }
+      }
+
+      function writeParticle(index, position, color, size, opacity) {
+        position.toArray(pointPositions, index * 3);
+        color.toArray(pointColors, index * 3);
+        pointSizes[index] = size;
+        pointOpacities[index] = opacity;
+      }
+
+      const particleColor = new THREE.Color();
+      const wispColor = new THREE.Color('#77d1c3');
+      const wispPosition = V();
+      function updateParticles(dt, t) {
+        let count = 0;
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const particle = particles[i];
+          particle.age += dt;
+          const progress = particle.age / particle.lifetime;
+          if (progress >= 1) {
+            particles[i] = particles[particles.length - 1];
+            particles.pop();
+            continue;
+          }
+          particle.velocity.y += particle.gravity * dt;
+          particle.velocity.multiplyScalar(Math.exp(-particle.drag * dt));
+          particle.p.addScaledVector(particle.velocity, dt);
+          if (particle.p.y < .046 && particle.gravity < 0) {
+            particle.p.y = .046;
+            particle.velocity.y = Math.abs(particle.velocity.y) * .34;
+            particle.velocity.x *= .8;
+            particle.velocity.z *= .8;
+          }
+          particleColor.copy(particle.startTint).lerp(particle.endTint, progress);
+          writeParticle(count++, particle.p, particleColor, particle.size * (1 - progress * .58), particle.opacity * (1 - progress) ** .85);
+        }
+
+        for (let i = 0; i < 25 && count < particleLimit; i++) {
+          const phase = i * 2.399 + t * (.21 + (i % 4) * .054);
+          const radius = 1.09 + (i % 9) * .52;
+          wispPosition.set(-.88 + Math.cos(phase) * radius, .25 + (i % 7) * .34 + Math.sin(phase * 1.28) * .26,
+            -.55 + Math.sin(phase) * radius);
+          writeParticle(count++, wispPosition, wispColor, i % 3 ? .075 : .145, .23 + .30 * Math.sin(phase * 1.41) ** 2);
+        }
+
+        pointsGeometry.setDrawRange(0, count);
+        for (const attr of Object.values(pointsGeometry.attributes)) {
+          attr.clearUpdateRanges();
+          attr.addUpdateRange(0, count * attr.itemSize);
+          attr.needsUpdate = true;
+        }
+      }
+
+      // Transient spell visuals release their owned GPU resources after use.
+      const effects = [];
+      const numbers = [];
+      const shockRing = new THREE.RingGeometry(.93, 1, 72);
+      const thinRing = new THREE.RingGeometry(.985, 1, 72);
+      const fireLight = new THREE.PointLight('#ff822c', 0, 4.8);
+      const earthLight = new THREE.PointLight('#8afa6f', 0, 5);
+      scene.add(fireLight, earthLight);
+      const flightCurve = new THREE.QuadraticBezierCurve3();
+      const fireCenter = V();
+      const targetLabel = document.querySelector('#target-label');
+      const damageLayer = document.querySelector('#damage');
+      const flashLayer = document.querySelector('#flash');
+      let shakeRemaining = 0;
+      let shakeTime = 0;
+      let shakeStrength = 0;
+      let flashRemaining = 0;
+
+      function addEffect(duration, update, dispose = () => {}) {
+        effects.push({ age: 0, duration, update, dispose });
+      }
+
+      function updateEffects(dt) {
+        for (let i = effects.length - 1; i >= 0; i--) {
+          const effect = effects[i];
+          effect.age += dt;
+          effect.update(Math.min(effect.age, effect.duration));
+          if (effect.age >= effect.duration) {
+            effect.dispose();
+            effects.splice(i, 1);
+          }
+        }
+      }
+
+      function addShake(duration, strength) {
+        shakeRemaining = shakeTime = reducedMotion.matches ? 0 : duration;
+        shakeStrength = strength;
+      }
+
+      function makeRing(position, color, radius, duration, options = {}) {
+        const { delay = 0, thickness = false, opacity = .76 } = options;
+        const mat = glowMaterial(color, opacity);
+        const ring = mesh(scene, thickness ? shockRing : thinRing, mat, position.x, .035 + delay * .01, position.z, .04, .04, 1, false);
+        ring.rotation.x = -Math.PI / 2;
+        ring.visible = delay === 0;
+        addEffect(duration + delay, age => {
+          const progress = clamp((age - delay) / duration);
+          ring.visible = age >= delay;
+          ring.scale.setScalar(lerp(.08, radius, cubeOut(progress)));
+          mat.opacity = opacity * (1 - progress) ** 1.36;
+        }, () => {
+          ring.removeFromParent();
+          mat.dispose();
+        });
+      }
+
+      function makePulse(position, color, scale, duration, opacity = .6) {
+        const mat = glowMaterial(color, opacity);
+        const burst = mesh(scene, geo.roundRock, mat, ...position.toArray(), .09, .09, .09, false);
+        addEffect(duration, age => {
+          const progress = age / duration;
+          burst.scale.setScalar(lerp(.09, scale, cubeOut(progress)));
+          mat.opacity = opacity * (1 - progress) ** 2.45;
+        }, () => {
+          burst.removeFromParent();
+          mat.dispose();
+        });
+      }
+
+      function drawBolt(parent, getStart, getEnd, width, jitter) {
+        const origin = V();
+        const chord = getEnd().sub(getStart());
+        const chordLength = chord.length();
+        const chordDirection = chord.clone().normalize();
+        const core = glowMaterial('#d7f3ff', 1);
+        const glow = glowMaterial('#359aff', .34);
+        const branch = glowMaterial('#70c5ff', .48);
+        let paths = [];
+        let lastShape = -1;
+
+        function clearPaths() {
+          for (const path of paths) {
+            path.geometry.dispose();
+            path.removeFromParent();
+          }
+          paths = [];
+        }
+
+        function displace(a, b, depth, offset) {
+          if (!depth) return [a, b];
+          const axis = b.clone().sub(a).normalize();
+          const normal = V().crossVectors(axis, Math.abs(axis.y) > .88 ? V(1, 0, 0) : up).normalize();
+          const binormal = V().crossVectors(axis, normal);
+          const mid = a.clone().lerp(b, .5)
+            .addScaledVector(normal, range(-offset, offset))
+            .addScaledVector(binormal, range(-offset, offset));
+          const left = displace(a, mid, depth - 1, offset * .49);
+          return left.slice(0, -1).concat(displace(mid, b, depth - 1, offset * .49));
+        }
+
+        function beam(points, radius, mat) {
+          paths.push(tube(parent, points, radius, mat, points.length * 2, 5, false));
+        }
+
+        addEffect(.30, age => {
+          parent.position.copy(getStart());
+          const liveChord = getEnd().sub(parent.position);
+          parent.scale.setScalar(liveChord.length() / chordLength);
+          parent.quaternion.setFromUnitVectors(chordDirection, liveChord.normalize());
+          const shape = Math.min(3, Math.floor(age / .061));
+          if (shape !== lastShape) {
+            lastShape = shape;
+            clearPaths();
+            const points = displace(origin, chord, 5, jitter);
+            beam(points, width, core);
+            beam(points, width * 4, glow);
+            for (const index of [8, 17, 23]) {
+              const point = points[index];
+              const offshoot = point.clone().add(V(range(-.8, .8), range(-.9, -.18), range(-.47, .47)));
+              beam(displace(point, offshoot, 3, .16), width * .51, branch);
+            }
+          }
+          const fade = (1 - age / .30) ** .79;
+          const flicker = .79 + .21 * Math.sin(age * 216) ** 2;
+          core.opacity = fade * flicker;
+          glow.opacity = fade * .39;
+          branch.opacity = fade * .65;
+        }, () => {
+          clearPaths();
+          core.dispose();
+          glow.dispose();
+          branch.dispose();
+          parent.removeFromParent();
+        });
+      }
+
+      function castLightning(spell) {
+        const target = getTargetPosition();
+        const crystal = getStaffTipWorldPosition();
+        const skyStrike = target.clone().add(V(.7, 6.5, -.25));
+        drawBolt(group(scene), () => skyStrike, getTargetPosition, .015, .96);
+        drawBolt(group(scene), getStaffTipWorldPosition, getTargetPosition, .019, .69);
+        createParticleBurst({ position: target, count: 82, color: '#d2f3ff', endColor: '#346dff', speed: 4.8, gravity: -4, life: .64, spread: .09, size: .13 });
+        createParticleBurst({ position: crystal, count: 26, color: '#9de4ff', endColor: '#296cf6', speed: 3, life: .44, size: .15 });
+        makePulse(target, '#78bdff', .62, .25);
+        makeRing(target, '#629dff', 1.13, .48, { thickness: true, opacity: .44 });
+        if (!reducedMotion.matches) flashRemaining = .13;
+        addShake(.12, .075);
+        hitTarget(spell, 3.5);
+        playSound('zap');
+      }
+
+      function palmPosition() {
+        return shaman.left.hand.localToWorld(V(0, .133, .25));
+      }
+
+      function createFireOrb() {
+        const root = group(scene);
+        const core = mesh(root, geo.roundRock, glowMaterial('#fff1a8', .97), 0, 0, 0, .12, .12, .12, false);
+        const shell = mesh(root, geo.ico, glowMaterial('#ff6425', .73), 0, 0, 0, .205, .205, .205, false);
+        const aura = halo(root, '#ff7726', .92, .92);
+        const seedPoints = Array.from({ length: 38 }, (_, i) => ({
+          angle: i * 2.399, speed: range(3.2, 7.1), radius: range(.095, .29), height: range(-.135, .135)
+        }));
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(seedPoints.length * 3);
+        const attribute = new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage);
+        geometry.setAttribute('position', attribute);
+        const emberMaterial = new THREE.PointsMaterial({
+          color: '#ffc66c', size: .075, map: glowTexture, transparent: true, opacity: .9,
+          depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false
+        });
+        const emberCloud = new THREE.Points(geometry, emberMaterial);
+        emberCloud.frustumCulled = false;
+        root.add(emberCloud);
+        return {
+          root,
+          update(position, amount, age) {
+            root.position.copy(position);
+            root.scale.setScalar(amount);
+            core.rotation.set(age * 5.4, age * 4, age * 1.7);
+            shell.rotation.set(age * -6, age * 3, age * -3);
+            aura.material.opacity = .71 + Math.sin(age * 47) * .13;
+            for (let i = 0; i < seedPoints.length; i++) {
+              const ember = seedPoints[i];
+              const phase = ember.angle + age * ember.speed;
+              positions[i * 3] = Math.cos(phase) * ember.radius;
+              positions[i * 3 + 1] = ember.height * Math.cos(phase * .52);
+              positions[i * 3 + 2] = Math.sin(phase) * ember.radius;
+            }
+            attribute.needsUpdate = true;
+            fireLight.position.copy(position);
+            fireLight.intensity = amount * (9 + 3 * Math.sin(age * 41) ** 2);
+          },
+          dispose() {
+            root.removeFromParent();
+            for (const tint of [core.material, shell.material, aura.material, emberMaterial]) tint.dispose();
+            geometry.dispose();
+            fireLight.intensity = 0;
+          }
+        };
+      }
+
+      function castFireball(spell, orb) {
+        const start = palmPosition();
+        const impact = getTargetPosition();
+        const apex = start.clone().lerp(impact, .5);
+        apex.y = Math.max(start.y, impact.y) + .85;
+        flightCurve.v0.copy(start);
+        flightCurve.v1.copy(apex);
+        flightCurve.v2.copy(impact);
+        let trailTime = 0;
+        let lastAge = 0;
+        playSound('whoosh');
+
+        addEffect(.4, age => {
+          flightCurve.getPoint(age / .4, fireCenter);
+          orb.update(fireCenter, 1.1 + age * .36, age + .5);
+          trailTime += age - lastAge;
+          lastAge = age;
+          while (trailTime >= .013) {
+            trailTime -= .013;
+            const trailPoint = flightCurve.getPoint(clamp((age - trailTime) / .4), V());
+            createParticleBurst({ position: trailPoint, count: 4, color: '#ffde91', endColor: '#a12316', speed: .85, lift: .64,
+              life: .46, size: .15, spread: .17 });
+          }
+        }, () => {
+          orb.dispose();
+          makePulse(impact, '#ffb85f', .96, .39, .82);
+          makePulse(impact, '#ff662b', 1.46, .52, .36);
+          makeRing(impact, '#ff9b51', 1.58, .85, { thickness: true });
+          makeRing(impact, '#e75427', 1.21, 1.30, { delay: .07, opacity: .61 });
+          createParticleBurst({ position: impact, count: 150, color: '#ffdf88', endColor: '#9f241c', speed: 5, gravity: -5.7,
+            life: 1.02, size: .15, spread: .15 });
+          addEffect(.33, age => {
+            fireLight.position.copy(impact);
+            fireLight.intensity = 47 * (1 - age / .33) ** 2;
+          }, () => {
+            fireLight.intensity = 0;
+          });
+          addShake(.18, .106);
+          hitTarget(spell, 5.4);
+          playSound('boom');
+        });
+      }
+
+      function createEarthTotem(position) {
+        const totem = group(scene, position.x, -1.35, position.z);
+        totem.rotation.y = -.17;
+        const eyes = glowMaterial('#aafa7b', .91);
+        const glow = halo(totem, '#69e653', 1.45, .6);
+        glow.position.y = .88;
+        mesh(totem, geo.dodeca, iron, 0, .058, 0, .33, .141, .27);
+        mesh(totem, geo.cylinder, wood, 0, .537, 0, .219, 1.062, .193);
+        for (const y of [.134, .344, .941, 1.022]) {
+          mesh(totem, geo.cylinder, y > .9 ? brass : woodGold, 0, y, 0, .228, .087, .211);
+        }
+        mesh(totem, geo.dodeca, woodGold, 0, .735, .052, .253, .27, .199);
+        mesh(totem, geo.dodeca, iron, 0, .66, .205, .173, .183, .073);
+        mesh(totem, geo.dodeca, bone, 0, .774, .257, .049, .057, .05);
+        mesh(totem, geo.box, wood, 0, .592, .263, .156, .053, .03);
+        mesh(totem, geo.box, eyes, 0, .59, .284, .097, .025, .01, false);
+        mesh(totem, geo.crystal, eyes, 0, 1.14, 0, .09, .145, .079, false);
+        for (const side of [-1, 1]) {
+          const wing = group(totem, side * .18, .66, -.033);
+          wing.rotation.z = side * -.32;
+          for (let i = 0; i < 3; i++) {
+            mesh(wing, geo.box, i % 2 ? woodGold : hide, side * (.148 - i * .031), .10 - i * .071, 0, .324 - i * .056, .068, .103);
+          }
+          mesh(totem, geo.box, eyes, side * .101, .723, .268, .087, .038, .024, false).rotation.z = side * .21;
+          between(totem, geo.cone, bone, V(side * .15, .936, 0), V(side * .29, 1.225, -.046), .075);
+        }
+        addEffect(3.18, age => {
+          const rise = backOut(clamp(age / .42));
+          const sink = cubeInOut(clamp((age - 2.64) / .54));
+          const pulse = .72 + .28 * Math.sin(age * 12) ** 2;
+          totem.position.y = -1.36 + 1.39 * rise * (1 - sink);
+          earthLight.position.set(position.x, totem.position.y + .84, position.z + .12);
+          earthLight.intensity = 11 * pulse * clamp(rise) * (1 - sink);
+          eyes.opacity = pulse * (1 - sink);
+          glow.material.opacity = .66 * pulse * (1 - sink);
+        }, () => {
+          totem.removeFromParent();
+          eyes.dispose();
+          glow.material.dispose();
+          earthLight.intensity = 0;
+        });
+      }
+
+      function castEarthquake(spell) {
+        const foot = shaman.staff.localToWorld(V(.07, -1.22, -.034));
+        const epicenter = V(foot.x, .04, foot.z);
+        const target = getTargetPosition();
+        const targetGround = V(target.x, .02, target.z);
+        const distance = epicenter.distanceTo(targetGround);
+        makeRing(epicenter, '#9eea71', distance + 1.8, 1.08, { thickness: true, opacity: .83 });
+        makeRing(epicenter, '#719c52', distance + 1.9, .98, { delay: .095, opacity: .68 });
+        makeRing(epicenter, '#dcf898', 1.95, .66, { delay: .036 });
+        createParticleBurst({ position: epicenter, count: 81, color: '#c1c693', endColor: '#6b7251', speed: 3.4,
+          gravity: -2.1, life: .97, size: .31, spread: .2, opacity: .64 });
+        makePulse(epicenter.clone().add(V(0, .12, 0)), '#a9ff80', .63, .33, .42);
+        const spikeMaterial = material('#536753', { emissive: '#6ca148', emissiveIntensity: .22 });
+        const rocks = group(scene);
+
+        const spikes = Array.from({ length: 9 }, (_, i) => {
+          const point = epicenter.clone().lerp(targetGround, (i + 1) / 9.5);
+          point.z += range(-.21, .21);
+          if (i === 8) point.z += .23;
+          const height = range(.48, .83) + i * .056;
+          const rock = mesh(rocks, i % 3 ? geo.cone : geo.dodeca, spikeMaterial, point.x, -height, point.z,
+            range(.21, .38), height, range(.20, .38));
+          rock.rotation.set(range(-.28, .36), range(0, tau), range(-.24, .22));
+          return { rock, point, height, delay: i * .04, erupted: false };
+        });
+
+        let targetHit = false;
+        addEffect(1.49, age => {
+          for (const spike of spikes) {
+            const time = age - spike.delay;
+            if (time < 0) continue;
+            const rise = backOut(clamp(time / .19));
+            const fall = cubeInOut(clamp((time - .73) / .40));
+            spike.rock.position.y = spike.height * (lerp(-1.15, .43, rise * (1 - fall)));
+            if (!spike.erupted) {
+              spike.erupted = true;
+              createParticleBurst({ position: spike.point, count: 11, color: '#a9c68a', endColor: '#727650', speed: 1.85,
+                lift: .15, gravity: -3.4, life: .62, size: .24, spread: .17, opacity: .66 });
+            }
+          }
+          if (age >= .32 && !targetHit) {
+            targetHit = true;
+            hitTarget(spell, 8.4);
+            makePulse(getTargetPosition(), '#aaff79', .57, .31, .48);
+          }
+        }, () => {
+          rocks.removeFromParent();
+          spikeMaterial.dispose();
+        });
+
+        createEarthTotem(V(epicenter.x - .63, 0, epicenter.z + .49));
+        addShake(.30, .16);
+        playSound('quake');
+      }
+
+      // Timing, cooldowns, and channel particles run on the same clock.
+      let cast = null;
+      let mana = 100;
+      const cooldowns = { lightning: 0, fireball: 0, earthquake: 0 };
+      const buttons = Object.fromEntries(
+        [...document.querySelectorAll('[data-spell]')].map(button => [button.dataset.spell, {
+          button, sweep: button.querySelector('.cooldown'), deniedUntil: 0
+        }])
+      );
+      const manaFill = document.querySelector('#mana-fill');
+      const manaMeter = document.querySelector('#mana');
+      const manaValue = document.querySelector('#mana-value');
+      const status = document.querySelector('#status');
+      const soundButton = document.querySelector('#sound');
+      let statusUntil = 0;
+      let time = 0;
+
+      function castSpell(type) {
+        const spell = SPELLS[type];
+        if (cast || time < cooldowns[type]) return;
+        prepareAudio();
+        if (mana < spell.cost) {
+          const entry = buttons[type];
+          entry.button.classList.remove('denied');
+          void entry.button.offsetWidth;
+          entry.button.classList.add('denied');
+          entry.deniedUntil = time + .34;
+          status.textContent = `Need ${spell.cost} mana to cast ${spell.name}.`;
+          statusUntil = time + 1.25;
+          return;
+        }
+        mana -= spell.cost;
+        cooldowns[type] = time + spell.cooldown;
+        cast = { type, spell, elapsed: 0, released: false, nextSpark: 0, orb: type === 'fireball' ? createFireOrb() : null };
+        status.textContent = '';
+        if (cast.orb) cast.orb.update(palmPosition(), .08, 0);
+        updateUI(0);
+      }
+
+      function updateCasting(dt) {
+        if (!cast) {
+          updatePose(null, 0, time);
+          return;
+        }
+        const { type, spell } = cast;
+        cast.elapsed += dt;
+        const elapsed = cast.elapsed;
+        if (elapsed >= spell.release && !cast.released) {
+          cast.released = true;
+          updatePose(type, spell.release, time);
+          updateCrystal(time);
+          if (type === 'lightning') castLightning(spell);
+          if (type === 'fireball') castFireball(spell, cast.orb);
+          if (type === 'earthquake') castEarthquake(spell);
+        }
+        if (elapsed >= spell.duration) {
+          cast = null;
+          updatePose(null, 0, time);
+          return;
+        }
+        updatePose(type, elapsed, time);
+        if (cast.released) return;
+
+        if (type === 'fireball') {
+          cast.orb.update(palmPosition(), .08 + .96 * cubeOut(elapsed / spell.release), elapsed);
+        }
+        if (elapsed < cast.nextSpark) return;
+        cast.nextSpark = elapsed + .027;
+        if (type === 'lightning') {
+          createParticleBurst({ position: getStaffTipWorldPosition(), count: 4, color: '#b6eaff', endColor: '#3d82fa',
+            speed: 1.3, life: .34, size: .12, spread: .21 });
+        }
+        if (type === 'earthquake') {
+          for (let i = 0; i < 5; i++) {
+            const angle = range(0, tau);
+            const radius = range(1.35, 1.83);
+            createParticleBurst({ position: V(-1.25 + Math.cos(angle) * radius, .06, Math.sin(angle) * radius),
+              count: 1, color: '#acbf8b', endColor: '#62694a', speed: .72, lift: .53, life: .54, size: .23, opacity: .58 });
+          }
+        }
+      }
+
+      function updateCrystal(t) {
+        let strength = 0;
+        if (cast) {
+          const { elapsed, spell } = cast;
+          strength = elapsed <= spell.release ? cubeOut(clamp(elapsed / spell.release)) :
+            1 - cubeInOut(clamp((elapsed - spell.release) / (spell.duration - spell.release)));
+        }
+        spellColor.copy(idleCrystal);
+        if (cast) spellColor.lerp(new THREE.Color(cast.spell.color), strength);
+        const flicker = cast?.type === 'lightning' ? .83 + .32 * Math.sin(t * 84) ** 2 : 1;
+        shaman.crystal.position.y = 1.011 + Math.sin(t * 3.4) * .047;
+        shaman.crystal.rotation.y = t * .99;
+        shaman.crystal.rotation.z = .12 * Math.sin(t * 1.8);
+        shaman.crystal.material.color.copy(spellColor).multiplyScalar(.63);
+        shaman.crystal.material.emissive.copy(spellColor);
+        shaman.crystal.material.emissiveIntensity = (1.14 + strength * 2.05 + Math.sin(t * 3.2) * .12) * flicker;
+        shaman.crystalGlow.position.copy(shaman.crystal.position);
+        shaman.crystalGlow.material.color.copy(spellColor);
+        shaman.crystalGlow.material.opacity = (.55 + strength * .40 + Math.sin(t * 2.9) * .055) * flicker;
+        shaman.crystalGlow.scale.set(1.22 + strength * .80, 1.22 + strength * .80, 1);
+        shaman.light.color.copy(spellColor);
+        shaman.light.intensity = (5.3 + .95 * Math.sin(t * 2.7) + strength * 17) * flicker;
+        shaman.eyeMaterial.emissive.copy(idleEyes).lerp(spellColor, strength);
+      }
+
+      let campEmber = 0;
+      function updateIdle(t) {
+        updateCrystal(t);
+        shaman.feathers.forEach(({ pivot, angle }, i) => {
+          pivot.rotation.z = angle + .065 * Math.sin(t * 2 + i * .8);
+          pivot.rotation.x = .08 * Math.sin(t * 1.8 + i * 1.1);
+        });
+        shaman.hangings.forEach((hanging, i) => {
+          hanging.rotation.x = .15 * Math.sin(t * 2.2 + i);
+          hanging.rotation.z = .13 * Math.sin(t * 2.45 + i * 1.4);
+        });
+
+        const { camp, light, flames, glow } = environment;
+        light.intensity = 11 + 2.7 * Math.sin(t * 24.1) + 1.5 * Math.sin(t * 38.1);
+        glow.material.opacity = .49 + Math.sin(t * 12.2) * .07;
+        for (const { flame, phase, x, z, height } of flames) {
+          const wave = t * 8 + phase;
+          const h = height * (.83 + .26 * Math.sin(wave));
+          flame.position.set(x + Math.sin(wave * .7) * .04, .10 + h * .48, z);
+          flame.rotation.set(Math.sin(wave + 1) * .31, wave * .52, Math.cos(wave) * .24);
+          flame.scale.set(.13 + .026 * Math.sin(wave), h, .125);
+        }
+        if (t >= campEmber) {
+          campEmber = t + .057;
+          createParticleBurst({ position: camp.position.clone().add(V(0, .34, 0)), count: 2, color: '#ffd187', endColor: '#c84a29',
+            speed: .39, lift: .59, life: 1.19, size: .086, spread: .13, opacity: .81 });
+        }
+      }
+
+      // Procedural audio starts only after a keypress or button press.
+      let audio;
+      let master;
+      let noise;
+      let muted = false;
+
+      function prepareAudio() {
+        if (muted) return;
+        const Context = window.AudioContext || window.webkitAudioContext;
+        if (!Context) return;
+        if (!audio) {
+          audio = new Context();
+          master = audio.createGain();
+          master.gain.value = .64;
+          master.connect(audio.destination);
+          noise = audio.createBuffer(1, Math.ceil(audio.sampleRate * 1.4), audio.sampleRate);
+          const samples = noise.getChannelData(0);
+          for (let i = 0; i < samples.length; i++) samples[i] = range(-1, 1);
+        }
+        if (audio.state === 'suspended') audio.resume().catch(() => {});
+      }
+
+      function soundEnvelope(start, duration, volume, attack) {
+        const level = audio.createGain();
+        level.gain.setValueAtTime(.0001, start);
+        level.gain.exponentialRampToValueAtTime(volume, start + attack);
+        level.gain.exponentialRampToValueAtTime(.0001, start + duration);
+        level.connect(master);
+        return level;
+      }
+
+      function tone({ start, duration, high, low, volume, type = 'sine', attack = .012 }) {
+        const oscillator = audio.createOscillator();
+        const envelope = soundEnvelope(start, duration, volume, attack);
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(high, start);
+        oscillator.frequency.exponentialRampToValueAtTime(low, start + duration);
+        oscillator.connect(envelope);
+        oscillator.start(start);
+        oscillator.stop(start + duration);
+        oscillator.onended = () => {
+          oscillator.disconnect();
+          envelope.disconnect();
+        };
+      }
+
+      function noiseSweep({ start, duration, from, to, volume, type, attack = .017, resonance = .7 }) {
+        const source = audio.createBufferSource();
+        const filter = audio.createBiquadFilter();
+        const envelope = soundEnvelope(start, duration, volume, attack);
+        source.buffer = noise;
+        filter.type = type;
+        filter.Q.value = resonance;
+        filter.frequency.setValueAtTime(from, start);
+        filter.frequency.exponentialRampToValueAtTime(to, start + duration);
+        source.connect(filter);
+        filter.connect(envelope);
+        source.start(start, range(0, noise.duration - duration), duration);
+        source.onended = () => {
+          source.disconnect();
+          filter.disconnect();
+          envelope.disconnect();
+        };
+      }
+
+      function playSound(type) {
+        if (!audio || muted || audio.state !== 'running') return;
+        const start = audio.currentTime + .007;
+        switch (type) {
+          case 'zap':
+            noiseSweep({ start, duration: .21, from: 1800, to: 670, volume: .26, type: 'highpass', attack: .007 });
+            tone({ start, duration: .21, high: 840, low: 103, volume: .09, type: 'triangle', attack: .006 });
+            break;
+          case 'whoosh':
+            noiseSweep({ start, duration: .36, from: 1150, to: 160, volume: .22, type: 'bandpass', attack: .062, resonance: 1.26 });
+            tone({ start, duration: .29, high: 207, low: 75, volume: .044, type: 'triangle', attack: .045 });
+            break;
+          case 'boom':
+            noiseSweep({ start, duration: .48, from: 780, to: 115, volume: .23, type: 'lowpass' });
+            tone({ start, duration: .47, high: 125, low: 37, volume: .22 });
+            break;
+          case 'quake':
+            noiseSweep({ start, duration: 1.1, from: 460, to: 92, volume: .4, type: 'lowpass', attack: .10 });
+            tone({ start, duration: .59, high: 93, low: 33, volume: .30 });
+            tone({ start: start + .09, duration: .8, high: 53, low: 37, volume: .11, type: 'triangle', attack: .11 });
+            break;
+        }
+      }
+
+      function setupUI() {
+        for (const [type, { button }] of Object.entries(buttons)) {
+          const { name, cost, cooldown } = SPELLS[type];
+          button.querySelector('.cost').textContent = cost;
+          button.setAttribute('aria-label', `${name}, ${cost} mana`);
+          button.title = `${name} · ${cost} mana · ${cooldown} s cooldown`;
+          button.disabled = false;
+          button.addEventListener('click', () => castSpell(type));
+        }
+        const keys = { '1': 'lightning', q: 'lightning', '2': 'fireball', w: 'fireball', '3': 'earthquake', e: 'earthquake' };
+        window.addEventListener('keydown', event => {
+          if (event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+          const type = keys[event.key.toLowerCase()];
+          if (type) {
+            event.preventDefault();
+            castSpell(type);
+          }
+        });
+        soundButton.disabled = false;
+        soundButton.addEventListener('click', () => {
+          muted = !muted;
+          if (!muted) prepareAudio();
+          if (master) master.gain.setTargetAtTime(muted ? .0001 : .64, audio.currentTime, .018);
+          soundButton.setAttribute('aria-pressed', String(muted));
+          soundButton.title = muted ? 'Unmute sound' : 'Mute sound';
+        });
+      }
+
+      function updateUI(dt) {
+        mana = Math.min(100, mana + dt * 8);
+        const shownMana = Math.floor(mana);
+        if (manaMeter.getAttribute('aria-valuenow') !== String(shownMana)) {
+          manaMeter.setAttribute('aria-valuenow', shownMana);
+          manaValue.textContent = `${shownMana} / 100`;
+        }
+        manaFill.style.transform = `scaleX(${mana / 100})`;
+        for (const [type, entry] of Object.entries(buttons)) {
+          const remaining = Math.max(0, cooldowns[type] - time);
+          const readout = remaining >= 1 ? Math.ceil(remaining).toString() : remaining > 0 ? remaining.toFixed(1) : '';
+          entry.button.classList.toggle('cooling', remaining > 0);
+          entry.button.classList.toggle('casting', cast?.type === type);
+          if (entry.deniedUntil <= time) entry.button.classList.remove('denied');
+          if (entry.sweep.textContent !== readout) entry.sweep.textContent = readout;
+          if (remaining > 0) entry.button.style.setProperty('--sweep', `${remaining / SPELLS[type].cooldown * 360}deg`);
+        }
+        if (time >= statusUntil && status.textContent) status.textContent = '';
+      }
+
+      const projection = V();
+      const cameraOffset = V();
+      const cameraPosition = V();
+      const defaultTarget = V(.20, 1.39, .04);
+      const defaultOffset = V(1.76, 1.72, 8.61);
+      let width;
+      let height;
+
+      function resize(initial = false) {
+        const previousAspect = camera.aspect;
+        width = stage.clientWidth;
+        height = stage.clientHeight;
+        camera.aspect = width / height;
+        const distanceScale = aspect => Math.max(1, 1 / aspect);
+        const portraitBlend = aspect => clamp((.91 - aspect) / .47);
+        const distance = distanceScale(camera.aspect);
+        const portrait = portraitBlend(camera.aspect);
+        controls.maxDistance = Math.max(21, defaultOffset.length() * distance * 1.15);
+        scene.fog.density = .052 / Math.sqrt(distance);
+
+        if (initial) {
+          controls.target.copy(defaultTarget);
+          controls.target.x += portrait * .16;
+          cameraOffset.copy(defaultOffset).applyAxisAngle(up, portrait * .24).multiplyScalar(distance);
+        } else {
+          const portraitChange = portrait - portraitBlend(previousAspect);
+          cameraOffset.copy(camera.position).sub(controls.target)
+            .applyAxisAngle(up, portraitChange * .24).multiplyScalar(distance / distanceScale(previousAspect));
+          controls.target.x += portraitChange * .16;
+        }
+        camera.position.copy(controls.target).add(cameraOffset);
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height, false);
+        particlesMaterial.uniforms.pixelScale.value = height * renderer.getPixelRatio() / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+        controls.update();
+      }
+
+      function placeLabel(label, position) {
+        projection.copy(position).project(camera);
+        const visible = projection.z >= -1 && projection.z <= 1 && Math.abs(projection.x) < 1 && Math.abs(projection.y) < 1;
+        label.hidden = !visible;
+        if (visible) {
+          const x = (projection.x * .5 + .5) * width;
+          const y = (.5 - projection.y * .5) * height;
+          label.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
+        }
+      }
+
+      function updateLabels(dt) {
+        placeLabel(targetLabel, dummy.footing.localToWorld(V(0, 2.52, .05)));
+        for (let i = numbers.length - 1; i >= 0; i--) {
+          const number = numbers[i];
+          number.age += dt;
+          if (number.age >= 1.04) {
+            number.label.remove();
+            numbers.splice(i, 1);
+            continue;
+          }
+          number.origin.y += dt * .68;
+          number.label.style.opacity = 1 - (number.age / 1.04) ** 2.3;
+          placeLabel(number.label, number.origin);
+        }
+      }
+
+      function animate() {
+        const dt = Math.min(clock.getDelta(), .12);
+        time += dt;
+        controls.update();
+        updateDummy(dt);
+        updateCasting(dt);
+        updateIdle(time);
+        updateEffects(dt);
+        updateParticles(Math.min(dt, .05), time);
+        updateUI(dt);
+
+        cameraPosition.copy(camera.position);
+        if (shakeRemaining > 0) {
+          const intensity = shakeStrength * (shakeRemaining / shakeTime) ** 1.3;
+          camera.position.add(cameraOffset.set(Math.sin(time * 138), Math.cos(time * 175) * .72, Math.sin(time * 183) * .29).multiplyScalar(intensity));
+          shakeRemaining = Math.max(0, shakeRemaining - dt);
+        }
+        flashLayer.style.opacity = (flashRemaining / .13) ** 2 * .3;
+        flashRemaining = Math.max(0, flashRemaining - dt);
+        camera.updateMatrixWorld();
+        updateLabels(dt);
+
+        renderer.render(scene, camera);
+        camera.position.copy(cameraPosition);
+        requestAnimationFrame(animate);
+      }
+
+      setupLights();
+      const environment = createEnvironment();
+      const shaman = createShaman();
+      const dummy = createDummy();
+      resize(true);
+      setupUI();
+      window.addEventListener('resize', () => resize());
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) clock.getDelta();
+      });
+      clock.start();
+      animate();
+      loading.hidden = true;
+    }
+  </script>
+</body>
+</html>

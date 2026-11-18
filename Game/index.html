@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101519">
+  <meta name="description" content="Guide ILO through a buried station, restore its three resonance relays, and bring the ascent lift back online.">
+  <title>DEEPWAKE</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23101519'/%3E%3Cpath d='m16 5 11 11-11 11L5 16Z M16 11l5 5-5 5-5-5Z' fill='%23ecc08a' fill-rule='evenodd'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-mark" viewBox="0 0 24 24"><path d="M12 1 23 12 12 23 1 12Zm0 5.7L6.7 12l5.3 5.3 5.3-5.3Z" fill="currentColor" fill-rule="evenodd" stroke="none"/></symbol>
+    <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6m2-8a7 7 0 0 1 0 10"/></symbol>
+    <symbol id="i-muted" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zM17 10l4 4m0-4-4 4"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14m6-14v14"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+    <symbol id="i-jump" viewBox="0 0 24 24"><path d="M12 20V4m-6 6 6-6 6 6"/></symbol>
+    <symbol id="i-dash" viewBox="0 0 24 24"><path d="m13 3-7 10h5l-1 8 8-11h-5z"/></symbol>
+    <symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 12h3l2-5 4 10 3-7 2 2h4"/></symbol>
+    <symbol id="i-use" viewBox="0 0 24 24"><path d="m12 3 9 9-9 9-9-9zm0 6v6m-3-3h6"/></symbol>
+    <symbol id="i-cell" viewBox="0 0 24 24"><path d="M9 5h6m-8 3h10v12H7zm3 6h4"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><path d="m12 3 8 4v10l-8 4-8-4V7zm-8 4 8 4 8-4m-8 4v10"/></symbol>
+    <symbol id="i-keys" viewBox="0 0 24 24"><path d="M3 6h18v12H3zm4 4h1m3 0h1m3 0h1m-9 4h10"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  </svg>
+
+  <main class="game-shell" id="shell" data-state="title">
+    <header class="topbar">
+      <div class="brand"><svg aria-hidden="true"><use href="#i-mark"/></svg><span>DEEPWAKE</span></div>
+      <div class="toolbar">
+        <button id="mute" class="tool-button" type="button" aria-label="Mute audio" aria-pressed="false"><svg aria-hidden="true"><use href="#i-sound"/></svg><span>Sound on</span></button>
+        <button id="pause" class="tool-button icon-only" type="button" aria-label="Pause expedition" title="Pause expedition (Esc)" hidden><svg aria-hidden="true"><use href="#i-pause"/></svg></button>
+      </div>
+    </header>
+
+    <section class="screen" id="screen" aria-label="Deepwake game">
+      <canvas id="view" aria-label="ILO in the underground station"></canvas>
+      <div class="screen-vignette" aria-hidden="true"></div>
+      <div class="frame-corners" aria-hidden="true"><b></b><b></b><b></b><b></b></div>
+
+      <div class="title-layer" id="title">
+        <div class="title-copy">
+          <div class="sector-label"><i></i> Buried Workshop</div>
+          <h1>DEEPWAKE</h1>
+          <p>Restore three resonance relays and guide ILO to the ascent lift.</p>
+          <button id="begin" type="button" class="primary">Begin Expedition <svg aria-hidden="true"><use href="#i-arrow"/></svg></button>
+          <div class="enter-hint"><kbd>Enter</kbd><span>to begin</span></div>
+        </div>
+      </div>
+
+      <div class="hud" id="hud" hidden>
+        <div class="hud-location">
+          <div class="sector-label" id="sector"><i></i>Sector A</div>
+          <div class="location-name" id="region">Buried Workshop</div>
+        </div>
+        <div class="hud-gauges">
+          <div class="gauge integrity-gauge">
+            <span class="gauge-label">Integrity</span>
+            <div id="integrity" class="integrity" role="meter" aria-label="Integrity" aria-valuemin="0" aria-valuemax="3" aria-valuenow="3"><i></i><i></i><i></i></div>
+          </div>
+          <div id="resonance-group" class="gauge energy-gauge" title="Echo pulse costs 35. The emergency shield uses 50.">
+            <span class="gauge-label">Resonance <span id="resonance-value">100</span></span>
+            <div id="resonance" class="energy" role="meter" aria-label="Resonance. Echo pulse costs 35. Emergency shield uses 50." aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div></div><i></i><i></i></div>
+          </div>
+          <div class="gauge relay-gauge">
+            <span class="gauge-label">Relays</span>
+            <div class="relay-states" id="relays"><span aria-label="Relay A offline">A</span><span aria-label="Relay B offline">B</span><span aria-label="Relay C offline">C</span></div>
+          </div>
+          <div class="gauge archive-gauge">
+            <span class="gauge-label">Archives</span>
+            <span class="archive-count"><svg aria-hidden="true"><use href="#i-archive"/></svg><span id="archives">0 / 3</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="prompt-layer" id="prompt-layer" hidden>
+        <span id="carrying" class="carry-status" hidden><svg aria-hidden="true"><use href="#i-cell"/></svg>Cell in hand</span>
+        <div class="prompt" id="prompt" hidden><kbd id="prompt-key"></kbd><span id="prompt-text"></span></div>
+      </div>
+
+      <div id="toast" class="toast" role="status" hidden></div>
+      <article id="fragment" class="fragment" hidden>
+        <div class="fragment-head"><span class="sector-label"><svg aria-hidden="true"><use href="#i-archive"/></svg>Memory Archive</span><button id="dismiss-fragment" type="button" class="icon-only tool-button" aria-label="Dismiss archive"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div>
+        <h2 id="fragment-title"></h2>
+        <p id="fragment-text"></p>
+      </article>
+
+      <div id="transition" class="transition" role="status" hidden>
+        <div id="transition-kicker" class="sector-label"></div>
+        <div id="transition-title"></div>
+      </div>
+
+      <div id="touch" class="touch" aria-label="Touch controls" hidden>
+        <div class="touch-move">
+          <button type="button" data-control="left" aria-label="Move left"><svg aria-hidden="true"><use href="#i-left"/></svg></button>
+          <button type="button" data-control="right" aria-label="Move right"><svg aria-hidden="true"><use href="#i-right"/></svg></button>
+        </div>
+        <div class="touch-actions">
+          <button type="button" data-control="pulse" aria-label="Echo pulse"><svg aria-hidden="true"><use href="#i-wave"/></svg><span>Echo</span></button>
+          <button type="button" data-control="interact" aria-label="Interact"><svg aria-hidden="true"><use href="#i-use"/></svg><span>Use</span></button>
+          <button type="button" data-control="dash" aria-label="Dash"><svg aria-hidden="true"><use href="#i-dash"/></svg><span>Dash</span></button>
+          <button type="button" data-control="jump" aria-label="Jump"><svg aria-hidden="true"><use href="#i-jump"/></svg><span>Jump</span></button>
+        </div>
+      </div>
+
+      <div class="modal-layer" id="modal-layer" hidden>
+        <section class="panel" id="pause-panel" role="dialog" aria-modal="true" aria-labelledby="pause-title" hidden>
+          <h2 id="pause-title">Expedition Paused</h2>
+          <p class="panel-summary" id="pause-summary"></p>
+          <div class="panel-actions">
+            <button type="button" class="primary" id="resume">Resume <svg aria-hidden="true"><use href="#i-arrow"/></svg></button>
+            <button type="button" class="secondary" id="retry">Retry from checkpoint <kbd>R</kbd></button>
+            <button type="button" class="secondary restart" id="restart">Restart Expedition</button>
+          </div>
+          <div class="panel-options">
+            <button type="button" class="text-button" id="pause-guide">Controls</button>
+            <details id="archive-panel"><summary>Memory Archives <span id="pause-archive-count"></span></summary><div id="archive-list"></div></details>
+            <label><input id="motion" type="checkbox"> Reduced motion</label>
+          </div>
+        </section>
+        <section class="panel guide-panel" id="guide-panel" role="dialog" aria-modal="true" aria-labelledby="guide-title" hidden>
+          <h2 id="guide-title">Controls</h2>
+          <dl class="controls-list">
+            <div><dt>Move</dt><dd><kbd>A</kbd> <kbd>D</kbd> or <kbd>←</kbd> <kbd>→</kbd></dd></div>
+            <div><dt>Jump / Wall jump</dt><dd><kbd>Space</kbd> or <kbd>Z</kbd></dd></div>
+            <div><dt>Dash</dt><dd><kbd>Shift</kbd> or <kbd>X</kbd></dd></div>
+            <div><dt>Echo pulse</dt><dd><kbd>Q</kbd></dd></div>
+            <div><dt>Interact</dt><dd><kbd>E</kbd></dd></div>
+            <div><dt>Pause / Resume</dt><dd><kbd>P</kbd> or <kbd>Esc</kbd></dd></div>
+            <div><dt>Retry from checkpoint</dt><dd><kbd>R</kbd></dd></div>
+          </dl>
+          <p>Hold Jump for more height. Hold toward a wall to slide, then jump away. Echo costs 35 resonance. The emergency shield spends 50. Set down carried cells to dash, pulse, or wall-jump.</p>
+          <button type="button" class="primary" id="close-guide">Back <svg aria-hidden="true"><use href="#i-arrow"/></svg></button>
+        </section>
+        <section class="panel complete-panel" id="complete-panel" role="dialog" aria-modal="true" aria-labelledby="complete-title" hidden>
+          <div class="sector-label"><i></i><span id="result-type">Expedition complete</span></div>
+          <h2 id="complete-title">Signal Restored</h2>
+          <dl id="result-stats" class="result-stats"></dl>
+          <div class="result-records"><h3>Personal records</h3><dl id="records"></dl></div>
+          <button id="again" type="button" class="primary">New Expedition <svg aria-hidden="true"><use href="#i-arrow"/></svg></button>
+        </section>
+      </div>
+    </section>
+
+    <footer class="controlbar">
+      <div class="key-strip" aria-label="Quick controls">
+        <span><kbd>A</kbd><kbd>D</kbd> Move</span>
+        <span><kbd>Space</kbd> Jump</span>
+        <span class="carrying-restriction"><kbd>Shift</kbd> Dash</span>
+        <span class="carrying-restriction"><kbd>Q</kbd> Echo</span>
+        <span><kbd>E</kbd> Interact</span>
+      </div>
+      <div class="expedition-clock" id="clock" hidden><i></i><span aria-label="Expedition time">00:00</span></div>
+      <button type="button" class="text-button" id="guide"><svg aria-hidden="true"><use href="#i-keys"/></svg> Controls</button>
+    </footer>
+    <noscript>Enable JavaScript to play DEEPWAKE.</noscript>
+  </main>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
